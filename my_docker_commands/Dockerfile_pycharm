@@ -43,20 +43,26 @@ RUN wget https://www.roboti.us/download/mujoco200_linux.zip -O mujoco.zip \
 
 # Make sure you have a license, otherwise comment this line out
 # Of course you then cannot use Mujoco and DM Control, but Roboschool is still available
-COPY mjkey.txt /shaang/.mujoco/mjkey.txt
+COPY ../mjkey.txt /shaang/.mujoco/mjkey.txt
 
 ENV LD_LIBRARY_PATH /shaang/.mujoco/mjpro150/bin:${LD_LIBRARY_PATH}
 ENV LD_LIBRARY_PATH /shaang/.mujoco/mjpro200_linux/bin:${LD_LIBRARY_PATH}
 
-COPY requirements.txt requirements.txt
+COPY ../requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 RUN pip install git+git://github.com/openai/baselines.git@8e56dd#egg=baselines
 
-WORKDIR /shaang/DeepRL
+WORKDIR /opt/project
 
 #COPY . .
+
 USER root
-#RUN chown shaang /shaang/DeepRL
-#RUN chown shaang /shaang
-CMD ["/bin/bash"]
+
+#RUN chown shaang .
+
+#USER shaang
+
+#RUN mkdir test_dir
+
+#CMD ["/bin/bash"]
 
