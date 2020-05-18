@@ -56,7 +56,22 @@ WORKDIR /shaang/DeepRL
 
 #COPY . .
 USER root
+
+RUN apt-get update -y 
+RUN apt-get install -y --no-install-recommends firefox xauth xvfb mesa-utils freeglut3-dev
+#RUN xauth add mscott99-UX303LB/unix:0  MIT-MAGIC-COOKIE-1  f0bee8a86f89b21f29e1765daeddb796
+
+#RUN rm -f /tmp/.X99-lock || true
+#RUN Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &
+#RUN xvfb=$!
+#RUN export DISPLAY=:99
+#EXPOSE 5558 8902
+#RUN export DISPLAY=:1
 #RUN chown shaang /shaang/DeepRL
 #RUN chown shaang /shaang
-CMD ["/bin/bash"]
+ENV DISPLAY :99
+RUN pip install pyglet==1.3.2
+#Add run.sh /run.sh
+#RUN chmod a+x /run.sh
+CMD ["./init_docker_start_examples.sh"]
 

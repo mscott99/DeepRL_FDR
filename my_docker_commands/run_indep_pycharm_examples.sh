@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
-
-
-docker run --rm -v `pwd`:/shaang/DeepRL --entrypoint python3 indep_pycharm:1.2 /shaang/DeepRL/examples.py
+xhost +local:root
+docker run --rm -it\
+       -e DISPLAY \
+       --name hello_Ngan\
+        --net=host \
+        -v /tmp/.X11-unix:/tmp/.X11-unix \
+        -v `pwd`:/shaang/DeepRL \
+        with_screen:7.2

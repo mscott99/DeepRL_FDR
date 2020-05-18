@@ -151,6 +151,7 @@ def categorical_dqn_feature(**kwargs):
     config.sgd_update_frequency = 4
 
     config.eval_interval = int(5e3)
+    config.save_interval = int(1e4)
     config.max_steps = 1e5
     run_steps(CategoricalDQNAgent(config))
 
@@ -203,8 +204,32 @@ def a2c_feature(**kwargs):
     config.entropy_weight = 0.01
     config.rollout_length = 5
     config.gradient_clip = 0.5
+    config.max_steps = 1e4
+    config.save_interval = 1e3
     run_steps(A2CAgent(config))
 
+# A2C
+def a2c_feature(**kwargs):
+    generate_tag(kwargs)
+    kwargs.setdefault('log_level', 0)
+    config = Config()
+    config.merge(kwargs)
+
+    config.num_workers = 5
+    config.task_fn = lambda: Task(config.game, num_envs=config.num_workers)
+    config.eval_env = Task(config.game)
+    config.optimizer_fn = lambda params: torch.optim.RMSprop(params, 0.001)
+    config.network_fn = lambda: CategoricalActorCriticNet(
+        config.state_dim, config.action_dim, FCBody(config.state_dim, gate=F.tanh))
+    config.discount = 0.99
+    config.use_gae = True
+    config.gae_tau = 0.95
+    config.entropy_weight = 0.01
+    config.rollout_length = 5
+    config.gradient_clip = 0.5
+    config.max_steps = 1e4
+    config.save_interval = 1e3
+    run_steps(A2CAgent(config))
 
 def a2c_pixel(**kwargs):
     generate_tag(kwargs)
@@ -436,16 +461,17 @@ def td3_continuous(**kwargs):
 if __name__ == '__main__':
     mkdir('log')
     mkdir('tf_log')
+    mkdir('data')
     set_one_thread()
     random_seed()
     select_device(-1)
     # select_device(0)
 
     game = 'CartPole-v0'
-    # dqn_feature(game=game)
+    #dqn_feature(game=game)
     # quantile_regression_dqn_feature(game=game)
     # categorical_dqn_feature(game=game)
-    # a2c_feature(game=game)
+    a2c_feature(game=game)
     # n_step_dqn_feature(game=game)
     # option_critic_feature(game=game)
 

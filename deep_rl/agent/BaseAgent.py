@@ -46,6 +46,18 @@ class BaseAgent:
                 break
         return ret
 
+    def render_episode(self):
+        env = self.config.eval_env
+        state = env.reset()
+        while True:
+            action = self.eval_step(state)
+            state, reward, done, info = env.step(action)
+            env.env.render()
+            ret = info[0]['episodic_return']
+            if ret is not None:
+                break
+        return ret
+
     def eval_episodes(self):
         episodic_returns = []
         for ep in range(self.config.eval_episodes):

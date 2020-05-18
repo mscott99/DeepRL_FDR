@@ -3,30 +3,28 @@
 # Permission given to modify the code as long as you keep this        #
 # declaration at the top                                              #
 #######################################################################
-
 from ..network import *
 from ..component import *
 from .BaseAgent import *
-
 import gym
 
-
-class A2CAgent(BaseAgent):
+class FDRA2CAgent(BaseAgent):
     def __init__(self, config):
         BaseAgent.__init__(self, config)
         self.config = config
         self.task = config.task_fn()
         self.eval_task = config.eval_env
         self.network = config.network_fn()
-        self.optimizer = config.optimizer_fn(self.network.parameters())
+        self.actor_optimizer = self.network.actor_opt
+        self.critic_optimizer = self.network.critic_opt
         self.total_steps = 0
         self.states = self.task.reset()
 
     def eval_step(self, state):
         self.config.state_normalizer.set_read_only()
         state = self.config.state_normalizer(state)
-        prediction = self.network(state)
-        action = to_np(prediction['a'])
+        action_probs = self.network.forward_actor(state)
+        action = np.argmax(to_np(action_probs))
         self.config.state_normalizer.unset_read_only()
         return action
 
@@ -42,7 +40,6 @@ class A2CAgent(BaseAgent):
             storage.add(prediction)
             storage.add({'r': tensor(rewards).unsqueeze(-1),
                          'm': tensor(1 - terminals).unsqueeze(-1)})
-
             states = next_states
             self.total_steps += config.num_workers
 
@@ -66,10 +63,14 @@ class A2CAgent(BaseAgent):
         log_prob, value, returns, advantages, entropy = storage.cat(['log_pi_a', 'v', 'ret', 'adv', 'ent'])
         policy_loss = -(log_prob * advantages).mean()
         value_loss = 0.5 * (returns - value).pow(2).mean()
-        entropy_loss = entropy.mean()
+        #entropy_loss = entropy.mean()
 
-        self.optimizer.zero_grad()
-        (policy_loss - config.entropy_weight * entropy_loss +
-         config.value_loss_weight * value_loss).backward()
+        self.actor_optimizer.zero_grad()
+        self.critic_optimizer.zero_grad()
+        #(policy_loss - config.entropy_weight * entropy_loss +
+        #config.value_loss_weight * value_loss).backward()
+        (policy_loss  +
+        config.value_loss_weight * value_loss).backward()
         nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
-        self.optimizer.step()
+        self.actor_optimizer.step()
+        self.critic_optimizer.step()
