@@ -8,7 +8,7 @@
 '''
 import numpy as np
 import torch
-from torch.optim.optimizer import Optimizer, required
+from torch.optim.optimizer import Optimizer#, required
 
 class FDR_quencher(Optimizer):
     '''
