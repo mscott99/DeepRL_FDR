@@ -68,11 +68,12 @@ def generate_tag(params):
     run = params['run']
     del params['game']
     del params['run']
-    str = ['%s_%s' % (k, v) for k, v in sorted(params.items())]
+    str = ['%s_%s' % (k, v) for i, (k, v) in enumerate(sorted(params.items())) if i < 3]
     tag = '%s-%s-run-%d' % (game, '-'.join(str), run)
     params['tag'] = tag
     params['game'] = game
     params['run'] = run
+
 
 
 def translate(pattern):

@@ -1,7 +1,7 @@
 '''
     Copyright (c) Facebook, Inc. and its affiliates.
 
-    This source code is licensed under the MIT license found in the LICENSE file in the root directory of this source tree.
+    This source code is licensed under the MIT license found in the LICENSE_fb file in the root directory of this source tree.
     
     PyTorch implementation of the scheduler based on the fluctuation-dissipation relation described in:
     Sho Yaida, "Fluctuation-dissipation relations for stochastic gradient descent," ICLR 2019.
@@ -31,10 +31,10 @@ class FDR_quencher(Optimizer):
             For example, the default value 0.9 implies the ten-fold decrease in the learning rate.
     '''
     # Setting up hyperparameters
-    def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, weight_decay=0.001, t_adaptive=1000, X=0.01, Y=0.9):
+    def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, weight_decay=0.001, t_adaptive=1000, X=0.01, Y=0.9, logger =None):
         defaults = dict(lr=lr_init, momentum=momentum, dampening=dampening, weight_decay=weight_decay, t_adaptive=t_adaptive, X=X, Y=Y)
         super(FDR_quencher, self).__init__(params, defaults)
-    
+        self.logger = logger
     def __setstate__(self, state):
         super(FDR_quencher, self).__setstate__(state)
     
@@ -120,7 +120,10 @@ class FDR_quencher(Optimizer):
 
                 # Adapt if sufficiently close to equilibrium
                 cFDR = np.abs((OLbar/ORbar) - 1.0)
-            
+                logger = self.logger
+                if logger is not None:
+                    logger.update_log_value('critic_cFDR', cFDR)
+
                 # In order to peek into what is going on behind the scene, please uncomment the following
                 #print('time=%d, cFDR=%.3f, lr=%.3f\n' % (group['t'], cFDR, group['lr']))
             

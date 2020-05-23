@@ -4,11 +4,9 @@
 # declaration at the top                                              #
 #######################################################################
 
-from tensorboardX import SummaryWriter
-import os
-import numpy as np
-import torch
 import logging
+
+from tensorboardX import SummaryWriter
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s: %(message)s')
 from .misc import *
@@ -35,6 +33,27 @@ class Logger(object):
             self.warning = vanilla_logger.warning
         self.all_steps = {}
         self.log_dir = log_dir
+        self.tracked_scalars = {}
+
+    def write_all_tracked_scalars(self, **kwargs):
+        tracked_scalars = self.tracked_scalars
+        for tag in iter(tracked_scalars):
+            self.add_scalar(tag, tracked_scalars[tag]['retrieve_funct'](tracked_scalars[tag]['obj']), **kwargs)
+
+    def update_log_value(self, tag, value):
+        tracked = self.tracked_scalars
+        if(tag in tracked.keys()):
+            self.tracked_scalars[tag]['obj'] = value
+
+    def track_scalar(self, tag, object, retrieve_funct=lambda obj: obj):
+        """Track variable:
+            -reference of parent object, with the retrieve funct to get the variable from the parent
+            -by value, with identity retrieve function. In that case it is expected to use "update_log_value" function at each frame.
+            this second mechanism is meant for variables that only ever are calculated in local variables.
+        """
+        # if(object is immutable and retrieve_funct(object) != object):
+        #    raise Exception("retrieve_function should be identity for immutable ref. object")
+        self.tracked_scalars[tag] = {'obj': object, 'retrieve_funct': retrieve_funct}
 
     def lazy_init_writer(self):
         if self.writer is None:

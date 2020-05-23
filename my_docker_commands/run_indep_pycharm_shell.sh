@@ -6,4 +6,4 @@ docker run --rm -it\
 	-v $XAUTHORITY:/shaang/.Xauthority\
 	-v `pwd`:/shaang/DeepRL\
 	--entrypoint /bin/bash\
-	with_screen:7.2
+	opt_params:0.1

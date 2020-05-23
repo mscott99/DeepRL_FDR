@@ -5,6 +5,6 @@ Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &
 xvfb=$!
 
 export DISPLAY=:99
-python3 examples.py
-process = $!
+python3 hyper_tuning.py
+process=$!
 wait process

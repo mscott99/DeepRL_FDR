@@ -70,7 +70,9 @@ RUN apt-get install -y --no-install-recommends firefox xauth xvfb mesa-utils fre
 #RUN chown shaang /shaang/DeepRL
 #RUN chown shaang /shaang
 ENV DISPLAY :99
-RUN pip install pyglet==1.3.2
+RUN pip install pyglet==1.3.2 scikit-learn
+#newer pyglet breaks monitor wrapper
+
 #Add run.sh /run.sh
 #RUN chmod a+x /run.sh
 CMD ["./init_docker_start_examples.sh"]

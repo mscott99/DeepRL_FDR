@@ -103,11 +103,13 @@ class CategoricalDissociatedActorCriticNet(nn.Module, BaseNet):
                  critic_opt_fn,
                  phi_body=None,
                  actor_body=None,
-                 critic_body=None):
+                 critic_body=None,
+                 logger=None):
         super(CategoricalDissociatedActorCriticNet, self).__init__()
         if phi_body is None: phi_body = DummyBody(state_dim)
         if actor_body is None: actor_body = DummyBody(phi_body.feature_dim)
         if critic_body is None: critic_body = DummyBody(phi_body.feature_dim)
+        self.logger = logger
         self.phi_body = phi_body
         self.actor_body = actor_body
         self.critic_body = critic_body
@@ -119,8 +121,9 @@ class CategoricalDissociatedActorCriticNet(nn.Module, BaseNet):
         self.phi_params = list(self.phi_body.parameters())
 
         self.actor_opt = actor_opt_fn(self.actor_params + self.phi_params)
-        self.critic_opt = critic_opt_fn(self.critic_params + self.phi_params)
+        self.critic_opt = critic_opt_fn(self.critic_params + self.phi_params, logger = logger)
         self.to(Config.DEVICE)
+
 
     def forward(self, obs, action=None):
         obs = tensor(obs)
@@ -134,6 +137,7 @@ class CategoricalDissociatedActorCriticNet(nn.Module, BaseNet):
             action = dist.sample()
         log_prob = dist.log_prob(action).unsqueeze(-1)
         entropy = dist.entropy().unsqueeze(-1)
+
         return {'a': action,
                 'log_pi_a': log_prob,
                 'ent': entropy,
