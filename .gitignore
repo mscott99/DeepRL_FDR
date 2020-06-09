@@ -99,3 +99,12 @@ mjkey.txt
 .DS_Store
 tf_log
 recording
+
+
+#Project specific
+saved_data/
+start_tensorboard
+test_display_gym.py
+data/
+tf_log/
+log/

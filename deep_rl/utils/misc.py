@@ -12,6 +12,7 @@ import torch
 import time
 from .torch_utils import *
 from pathlib import Path
+import os, re, shutil
 
 
 def run_steps(agent):
@@ -85,3 +86,12 @@ def translate(pattern):
 def split(a, n):
     k, m = divmod(len(a), n)
     return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
+
+def purge(dir, pattern):
+    for f in os.listdir(dir):
+        if re.search(pattern, f):
+            path_delete = os.path.join(dir, f)
+            if(os.path.isfile(path_delete)):
+                os.remove(path_delete)
+            else:
+                shutil.rmtree(path_delete)

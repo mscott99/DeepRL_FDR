@@ -10,6 +10,7 @@ from ..network import *
 
 
 class FDRA2CAgent(BaseAgent):
+
     def __init__(self, config):
         BaseAgent.__init__(self, config)
         self.config = config
@@ -20,20 +21,27 @@ class FDRA2CAgent(BaseAgent):
         self.critic_optimizer = self.network.critic_opt
         self.total_steps = 0
         self.states = self.task.reset()
-        self.init_logger()
+        self.init_logger(config.log_keywords)
         if self.config.alternate:
             #Alternation mechanism: boolean determines self.updating_critic says which one is updated,
             #and check_for_alternation checks if requisite conditions are in place to change training.
             self.last_change = 0
             self.updating_critic=True
-            self.check_for_alternation = self.config.check_for_alternation
+            default_fn = lambda : None
+            actor_reset_fn = lambda:None
+            critic_reset_fn = lambda:None
+            if(hasattr(self.actor_optimizer, "reset_stats")):
+                actor_reset_fn = self.actor_optimizer.reset_stats
+            if(hasattr(self.critic_optimizer, "reset_stats")):
+                critic_reset_fn = self.critic_optimizer.reset_stats
+            self.check_for_alternation = lambda critic_updating, info: self.config.check_for_alternation(
+                actor_reset_fn, critic_reset_fn, critic_updating, info)
 
-    def init_logger(self):
+    def init_logger(self, keywords):
         logger = self.logger
-        logger.track_scalar("current_lr", self.actor_optimizer.param_groups[0], lambda obj: obj['lr'])
-        logger.track_scalar("actor_loss", 0)
-        logger.track_scalar("critic_loss", 0)
-        logger.track_scalar("critic_cFDR", 0)
+        for word, val in keywords:
+            logger.track_scalar(word,False,val)
+
     def eval_step(self, state):
         self.config.state_normalizer.set_read_only()
         state = self.config.state_normalizer(state)
@@ -77,29 +85,39 @@ class FDRA2CAgent(BaseAgent):
         log_prob, value, returns, advantages, entropy = storage.cat(['log_pi_a', 'v', 'ret', 'adv', 'ent'])
         policy_loss = -(log_prob * advantages).mean()
         value_loss = 0.5 * (returns - value).pow(2).mean()
-        entropy_loss = entropy.mean()
+        #entropy_loss = entropy.mean()
         logger = self.logger
-        logger.update_log_value('actor_loss', policy_loss)
-        logger.update_log_value('critic_loss', value_loss)
+        #logger.update_log_value('actor_loss', policy_loss.item())
+        logger.update_log_value('critic_loss', value_loss.item())
+        logger.update_log_value('actor_loss', policy_loss.item())
 
-
-        self.actor_optimizer.zero_grad()
-        self.critic_optimizer.zero_grad()
-        (policy_loss - config.entropy_weight * entropy_loss +
-        config.value_loss_weight * value_loss).backward()
+        #(policy_loss - config.entropy_weight * entropy_loss +
+        #config.value_loss_weight * value_loss).backward()
         #(policy_loss +
         # config.value_loss_weight * value_loss).backward()
-        nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
+
 
         if self.config.alternate:
             updating_critique = self.updating_critic
-            if(self.check_for_alternation(updating_critique, self.total_steps, self.last_change, self.config.num_workers, self.logger.tracked_scalars)):
+            alternate_info = {"total_steps": self.total_steps, "last_change": self.last_change, "num_workers": self.config.num_workers}
+            alternate_info.update(logger.tracked_scalars)
+            if(self.check_for_alternation(updating_critique, alternate_info)):
                 self.updating_critic = not updating_critique
                 self.last_change = self.total_steps
+
             if self.updating_critic:
+                self.critic_optimizer.zero_grad()
+                value_loss.backward()
+                if config.gradient_clip is not None:
+                    nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
                 self.critic_optimizer.step()
             else:
+                self.actor_optimizer.zero_grad()
+                policy_loss.backward()
+                if config.gradient_clip is not None:
+                    nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
                 self.actor_optimizer.step()
+
         else:
             self.actor_optimizer.step()
             self.critic_optimizer.step()

@@ -35,25 +35,48 @@ class Logger(object):
         self.log_dir = log_dir
         self.tracked_scalars = {}
 
+    class tracked_val:
+        def __init__(self, obj, retrieve_funct):
+            self.a = obj
+            self.retrieve_funct = retrieve_funct
+
+        def __init__(self, default_value):
+            self.a = default_value
+            self.default_value = default_value
+            self.retrieve_funct = lambda id: id
+
+        def get(self):
+            return self.retrieve_funct(self.a)
+
+        def update_val(self, value):
+            self.a = value
+
+        def reset_val(self):
+            self.a = self.default_value
+
+
     def write_all_tracked_scalars(self, **kwargs):
         tracked_scalars = self.tracked_scalars
         for tag in iter(tracked_scalars):
-            self.add_scalar(tag, tracked_scalars[tag]['retrieve_funct'](tracked_scalars[tag]['obj']), **kwargs)
+            self.add_scalar(tag, tracked_scalars[tag].get(), **kwargs)
 
     def update_log_value(self, tag, value):
         tracked = self.tracked_scalars
         if(tag in tracked.keys()):
-            self.tracked_scalars[tag]['obj'] = value
+            self.tracked_scalars[tag].update_val(value)
 
-    def track_scalar(self, tag, object, retrieve_funct=lambda obj: obj):
+    def track_scalar(self, tag, is_by_reference, default_value=0, ref_obj=None, retrieve_funct=lambda obj: obj):
         """Track variable:
             -reference of parent object, with the retrieve funct to get the variable from the parent
-            -by value, with identity retrieve function. In that case it is expected to use "update_log_value" function at each frame.
+            -object is value, with identity retrieve function. In that case it is expected to use "update_log_value" function at each frame.
             this second mechanism is meant for variables that only ever are calculated in local variables.
         """
         # if(object is immutable and retrieve_funct(object) != object):
         #    raise Exception("retrieve_function should be identity for immutable ref. object")
-        self.tracked_scalars[tag] = {'obj': object, 'retrieve_funct': retrieve_funct}
+        if is_by_reference:
+            self.tracked_scalars[tag] = self.tracked_val(ref_obj, retrieve_funct)
+        else:
+            self.tracked_scalars[tag] = self.tracked_val(default_value)
 
     def lazy_init_writer(self):
         if self.writer is None:

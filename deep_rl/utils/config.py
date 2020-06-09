@@ -60,6 +60,7 @@ class Config:
         self.tasks = False
         self.alternate = False
         self.check_for_alternation = None
+        self.log_keywords = []
 
     @property
     def eval_env(self):

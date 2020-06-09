@@ -120,8 +120,8 @@ class CategoricalDissociatedActorCriticNet(nn.Module, BaseNet):
         self.critic_params = list(self.critic_body.parameters()) + list(self.fc_critic.parameters())
         self.phi_params = list(self.phi_body.parameters())
 
-        self.actor_opt = actor_opt_fn(self.actor_params + self.phi_params)
-        self.critic_opt = critic_opt_fn(self.critic_params + self.phi_params, logger = logger)
+        self.actor_opt = actor_opt_fn(self.actor_params + self.phi_params, logger=logger)
+        self.critic_opt = critic_opt_fn(self.critic_params + self.phi_params, logger=logger)
         self.to(Config.DEVICE)
 
 
