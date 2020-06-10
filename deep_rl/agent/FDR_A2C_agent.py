@@ -54,9 +54,11 @@ class FDRA2CAgent(BaseAgent):
         config = self.config
         storage = Storage(config.rollout_length)
         states = self.states
+        logger = self.logger
         for _ in range(config.rollout_length):
             prediction = self.network(config.state_normalizer(states))
             next_states, rewards, terminals, info = self.task.step(to_np(prediction['a']))
+            logger.update_log_value("action", float(to_np(prediction['a'])[0]))
             self.record_online_return(info)
             rewards = config.reward_normalizer(rewards)
             storage.add(prediction)
@@ -85,9 +87,7 @@ class FDRA2CAgent(BaseAgent):
         log_prob, value, returns, advantages, entropy = storage.cat(['log_pi_a', 'v', 'ret', 'adv', 'ent'])
         policy_loss = -(log_prob * advantages).mean()
         value_loss = 0.5 * (returns - value).pow(2).mean()
-        #entropy_loss = entropy.mean()
-        logger = self.logger
-        #logger.update_log_value('actor_loss', policy_loss.item())
+        entropy_loss = entropy.mean()
         logger.update_log_value('critic_loss', value_loss.item())
         logger.update_log_value('actor_loss', policy_loss.item())
 
@@ -107,13 +107,13 @@ class FDRA2CAgent(BaseAgent):
 
             if self.updating_critic:
                 self.critic_optimizer.zero_grad()
-                value_loss.backward()
+                (value_loss - config.entropy_weight*entropy_loss).backward()
                 if config.gradient_clip is not None:
                     nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
                 self.critic_optimizer.step()
             else:
                 self.actor_optimizer.zero_grad()
-                policy_loss.backward()
+                (policy_loss - config.entropy_weight*entropy_loss).backward()
                 if config.gradient_clip is not None:
                     nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
                 self.actor_optimizer.step()

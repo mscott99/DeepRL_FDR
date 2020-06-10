@@ -35,13 +35,18 @@ class FDR_quencher(Optimizer):
 
     # Setting up hyperparameters
     def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, weight_decay=0.001, t_adaptive=1000, X=0.01,
-                 Y=0.9, logger=None, tag=None):
+                 Y=0.9, logger=None, tag=None, time_factor=1, baseline_avg_length=1000, dFDR_avg_length=1000):
         defaults = dict(lr=lr_init, momentum=momentum, dampening=dampening, weight_decay=weight_decay,
                         t_adaptive=t_adaptive, X=X, Y=Y)
         super(FDR_quencher, self).__init__(params, defaults)
         self.logger = logger
         self.tag = tag
         self.lr_init = lr_init
+        self.time_factor = time_factor
+        self.baseline_avg_length = baseline_avg_length
+        self.dFDR_avg_length = dFDR_avg_length
+        self.reset_stats()
+        #time_factor: num steps per update of FDR
 
     def __setstate__(self, state):
         super(FDR_quencher, self).__setstate__(state)
@@ -64,13 +69,13 @@ class FDR_quencher(Optimizer):
 
 
             # Allocating memory for observables in the first fluctuation-dissipation relation
-            if 'OLs' not in group:
-                # Observables in the first fluctuation-dissipation relation
-                group['OLs'] = list()
-                group['ORs'] = list()
-                group['t'] = 0
-                group['dORbar'] = RunningAvg(100) #to avoid division by zero
-                group['dOLbar'] = RunningAvg(100)
+            #if 'OLs' not in group:
+            #    # Observables in the first fluctuation-dissipation relation
+            #    group['OLs'] = list()
+                #group['ORs'] = list()
+                #group['t'] = 0
+                #group['dORbar'] = RunningAvg(int(100/self.time_factor))
+                #group['dOLbar'] = RunningAvg(int(100/self.time_factor))
 
             # Read time
             t_adaptive = group['t_adaptive']
@@ -100,19 +105,22 @@ class FDR_quencher(Optimizer):
 
                 # Create baseline
                 if 'baseline' not in param_state:
-                    baseline = param_state['baseline'] = torch.zeros_like(theta)
+                    #baseline = param_state['baseline'] = torch.zeros_like(theta)
+                    baseline = param_state['baseline'] = RunningAvg(int(self.baseline_avg_length/self.time_factor), correct_begin=True,
+                                                                    init_value=torch.zeros_like(theta))
                 else:
                     baseline = param_state['baseline']
 
                 #Compute baseline
                 #baseline = (theta + t*baseline)/(t+1)
-                n = 100
-                baseline = (theta + (n-1)*baseline)/(n)
+                #n = 100
+                #baseline = (theta + (n-1)*baseline)/(n)
+                baseline.add(theta)
 
                 # Compute observables
                 v_squared += torch.norm(v) ** 2
-                theta_base_norm_sqrd += torch.norm(theta-baseline) ** 2
-                OL += -torch.dot(F.view(-1), (theta - baseline).view(-1))
+                theta_base_norm_sqrd += torch.norm(theta-baseline.get()) ** 2
+                OL += -torch.dot(F.view(-1), (theta - baseline.get()).view(-1))
 
 
                 # Update velocity and position
@@ -121,7 +129,7 @@ class FDR_quencher(Optimizer):
 
                 # Save current v update
                 param_state['velocity'] = v
-                param_state['baseline'] = baseline
+                #param_state['baseline'] = baseline
 
 
             # Record OL and OR
@@ -132,7 +140,7 @@ class FDR_quencher(Optimizer):
             #group['ORs'].append(OR)
             group['t'] += 1
 
-            m=100
+            #m=100
             #dOL = group['dOLbar']
             #dOR = group['dORbar']
             #dOL = (OL + (m-1)*dOL)/m
@@ -201,8 +209,8 @@ class FDR_quencher(Optimizer):
             # Purge running record of observables
             group['OLs'] = list()
             group['ORs'] = list()
-            group['dORbar'] = 1.0  # to avoid division by zero
-            group['dOLbar'] = -10.0
+            group['dORbar'] = RunningAvg(int(self.dFDR_avg_length/self.time_factor))  # to avoid division by zero
+            group['dOLbar'] = RunningAvg(int(self.dFDR_avg_length/self.time_factor))
             # Reset time
             group['t'] = 0
 

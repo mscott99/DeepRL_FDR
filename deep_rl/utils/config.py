@@ -61,7 +61,19 @@ class Config:
         self.alternate = False
         self.check_for_alternation = None
         self.log_keywords = []
-
+        self.actor_hidden_units = (16,16)
+        self.critic_hidden_units = (16,16)
+        self.actor_lr = 0.001
+        self.critic_lr = 0.001
+        self.critic_mom = 0
+        self.actor_mom = 0
+        self.actor_damp = 0
+        self.critic_damp = 0
+        self.X = 0.01
+        self.Y = 0.9
+        self.t_adaptive = 100
+        self.baseline_avg_length = 1000.0
+        self.dFDR_avg_length = 1000.0
     @property
     def eval_env(self):
         return self.__eval_env

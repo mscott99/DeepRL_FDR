@@ -109,6 +109,7 @@ def check_alternate_stuck(reset_actor, reset_critic, critic_updating, info):
     return False
 
 class Small_A2C_FDR(Model):
+    """Parent model, make children for more specific implementation"""
     def __init__(self, **kwargs):
         generate_tag(kwargs)
         kwargs.setdefault('log_level', 0)
@@ -123,23 +124,26 @@ class Small_A2C_FDR(Model):
             config.state_dim,
             config.action_dim,
             #actor_opt_fn=lambda params, logger=None: torch.optim.RMSprop(params, 0.005),
-            actor_opt_fn=lambda params, logger=None: FDR_quencher(params, lr_init=0.0005, momentum=0, dampening=0,
-                                                                  weight_decay=0.001, t_adaptive=30, X=0.01, Y=0.9,
-                                                                  logger=logger, tag="actor"),
+            actor_opt_fn=lambda params, logger=None: FDR_quencher(params, lr_init=config.actor_lr, momentum=config.actor_mom, dampening=config.actor_damp,
+                                                                  weight_decay=0.001, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
+                                                                  logger=logger, tag="actor",time_factor=config.rollout_length*config.num_workers,
+                                                                  baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length),
 
             #critic_opt_fn=lambda params, logger=None: torch.optim.RMSprop(params, 0.005),
-            critic_opt_fn=lambda params, logger=None: FDR_quencher(params, lr_init=0.0005, momentum=0, dampening=0.0,
-                                                                   weight_decay=0.003, t_adaptive=100, X=0.01, Y=0.9,
-                                                                   logger=logger, tag="critic"),
+            critic_opt_fn=lambda params, logger=None: FDR_quencher(params, lr_init=config.critic_lr, momentum=config.critic_mom, dampening=config.critic_damp,
+                                                                   weight_decay=0.003, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
+                                                                   logger=logger, tag="critic", time_factor=config.rollout_length*config.num_workers,
+                                                                   baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length),
             phi_body=None,
-            actor_body=FCBody(config.state_dim, hidden_units=(32, 32), gate=torch.tanh),
-            critic_body=FCBody(config.state_dim, hidden_units=(32, 32), gate=torch.tanh),
+            actor_body=FCBody(config.state_dim, hidden_units=config.actor_hidden_units, gate=torch.tanh),
+            critic_body=FCBody(config.state_dim, hidden_units=config.critic_hidden_units, gate=torch.tanh),
             logger=logger
         )
         config.discount = 0.98
+        config.actor_hidden_units = (32,32)
+        config.critic_hidden_units = (32,32)
         config.use_gae = False
         # config.entropy_weight = 0.01
-        config.tag = "lr_001"
         config.alternate = True
         config.check_for_alternation = lambda *args: check_alternate_by_cFDR(1,1, *args)
         #config.check_for_alternation = lambda *params: check_alternate_by_cFDR(0.2, 0.2, *params)
@@ -148,9 +152,42 @@ class Small_A2C_FDR(Model):
         #config.save_interval = 1e6
         #config.log_interval = 1e4
         config.max_steps = 2e5
-        config.log_keywords = [("critic_loss",0),("actor_loss",0) ,("dFDR_critic",100),("cFDR_critic",100), ("dFDR_actor", 100), ("cFDR_actor", 100), ("OL_critic",100),("OR_critic",1),("Base_Theta_critic",0),("OL_actor",100),("OR_actor",1),("Base_Theta_actor",0)]
+        #config.log_keywords = [("action",0),("critic_loss",0),("actor_loss",0) ,("dFDR_critic",100),("cFDR_critic",100), ("dFDR_actor", 100), ("cFDR_actor", 100), ("OL_critic",100),("OR_critic",1),("Base_Theta_critic",0),("OL_actor",100),("OR_actor",1),("Base_Theta_actor",0)]
+        config.log_keywords = [("action",0),("critic_loss",0),("actor_loss",0) ,("dFDR_critic",100), ("dFDR_actor", 100), ("OL_critic",100),("OR_critic",1),("OL_actor",100),("OR_actor",1)]
         config.tag = "mountain_car_debug"
-        self.agent = FDRA2CAgent(config)
+        self.agent = FDRA2CAgent
+        config.merge(kwargs)
+        self.config = config
+
+    def initialize(self):
+        self.agent = self.agent(self.config)
+
+class FDR_A2C_Entropy(Small_A2C_FDR):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        config= self.config
+        config.entropy_weight = 0.1
+        #Override when arguments are given from the running configuration
+        config.merge(kwargs)
+
+class FDR_A2C_RMS(Small_A2C_FDR):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        config= self.config
+        config.entropy_weight = 0.1
+        config.alternate=False
+        #Override when arguments are given from the running configuration
+        config.network_fn = lambda logger=None: CategoricalDissociatedActorCriticNet(
+            config.state_dim,
+            config.action_dim,
+            actor_opt_fn=lambda params, logger=None: torch.optim.RMSprop(params, config.actor_lr),
+            critic_opt_fn=lambda params, logger=None: torch.optim.RMSprop(params, config.critic_lr),
+            phi_body=None,
+            actor_body=FCBody(config.state_dim, hidden_units=config.actor_hidden_units, gate=torch.tanh),
+            critic_body=FCBody(config.state_dim, hidden_units=config.critic_hidden_units, gate=torch.tanh),
+            logger=logger
+        )
+        config.merge(kwargs)
 
 
 class Small_A2C_FDR_param_tuning(Model):
@@ -160,8 +197,8 @@ class Small_A2C_FDR_param_tuning(Model):
         generate_tag(kwargs)
         kwargs.setdefault('log_level', 0)
         config = Config()
-        config.merge(kwargs)
 
+        config.merge(kwargs)
         # config.num_workers = 3
         config.task_fn = lambda: Task(config.game, num_envs=config.num_workers)
         config.eval_env = Task(config.game)
@@ -194,3 +231,4 @@ class Small_A2C_FDR_param_tuning(Model):
         config.alternate = True
         config.check_for_alternation = lambda *params: check_alternate_by_cFDR(0.2,0.2, *params)
         self.agent = FDRA2CAgent(config)
+
