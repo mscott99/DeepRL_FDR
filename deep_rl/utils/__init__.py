@@ -6,3 +6,4 @@ from .plot import Plotter
 from .schedule import *
 from .torch_utils import *
 from .running_avg import *
+from .utils import *

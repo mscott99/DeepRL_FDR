@@ -74,6 +74,10 @@ class Config:
         self.t_adaptive = 100
         self.baseline_avg_length = 1000.0
         self.dFDR_avg_length = 1000.0
+        self.critic_loss_tolerance = 3.0
+        self.track_critic_vals=False
+        self.sceptic_period = 0
+        #dont believe average before  sceptic_period has expired
     @property
     def eval_env(self):
         return self.__eval_env

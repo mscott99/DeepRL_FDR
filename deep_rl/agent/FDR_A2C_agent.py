@@ -7,7 +7,7 @@
 from .BaseAgent import *
 from ..component import *
 from ..network import *
-
+from math import sqrt
 
 class FDRA2CAgent(BaseAgent):
 
@@ -20,27 +20,42 @@ class FDRA2CAgent(BaseAgent):
         self.actor_optimizer = self.network.actor_opt
         self.critic_optimizer = self.network.critic_opt
         self.total_steps = 0
+        self.time_factor = (config.num_workers*config.rollout_length)
         self.states = self.task.reset()
         self.init_logger(config.log_keywords)
+
+        if config.track_critic_vals:
+            self.critic_loss_baseline = RunningAvg(config.baseline_avg_length/self.time_factor)
+            self.critic_loss_variance = RunningAvg(config.baseline_avg_length/self.time_factor)
+            self.last_stable_critic_val = 0
+
         if self.config.alternate:
             #Alternation mechanism: boolean determines self.updating_critic says which one is updated,
             #and check_for_alternation checks if requisite conditions are in place to change training.
             self.last_change = 0
             self.updating_critic=True
-            default_fn = lambda : None
-            actor_reset_fn = lambda:None
-            critic_reset_fn = lambda:None
+
+            #build transition functions
+            to_critic_callback = lambda:None
+            to_actor_callback = lambda:None
             if(hasattr(self.actor_optimizer, "reset_stats")):
-                actor_reset_fn = self.actor_optimizer.reset_stats
+                to_critic_callback = self.actor_optimizer.reset_stats
             if(hasattr(self.critic_optimizer, "reset_stats")):
-                critic_reset_fn = self.critic_optimizer.reset_stats
+                to_actor_callback = self.critic_optimizer.reset_stats
+            if config.track_critic_vals:
+                to_actor_callback_final = lambda: call_two_fn(to_actor_callback, lambda: self.assign_stable_critic_loss())
+
+            #set check for alternation function
             self.check_for_alternation = lambda critic_updating, info: self.config.check_for_alternation(
-                actor_reset_fn, critic_reset_fn, critic_updating, info)
+                to_critic_callback, to_actor_callback_final, critic_updating, info)
 
     def init_logger(self, keywords):
         logger = self.logger
         for word, val in keywords:
             logger.track_scalar(word,False,val)
+
+    def assign_stable_critic_loss(self):
+        self.last_stable_critic_val = self.critic_loss_baseline.get()
 
     def eval_step(self, state):
         self.config.state_normalizer.set_read_only()
@@ -87,6 +102,8 @@ class FDRA2CAgent(BaseAgent):
         log_prob, value, returns, advantages, entropy = storage.cat(['log_pi_a', 'v', 'ret', 'adv', 'ent'])
         policy_loss = -(log_prob * advantages).mean()
         value_loss = 0.5 * (returns - value).pow(2).mean()
+        self.critic_loss_variance.add((policy_loss-self.critic_loss_baseline.get())**2)
+        self.critic_loss_baseline.add(policy_loss)
         entropy_loss = entropy.mean()
         logger.update_log_value('critic_loss', value_loss.item())
         logger.update_log_value('actor_loss', policy_loss.item())
@@ -99,8 +116,15 @@ class FDRA2CAgent(BaseAgent):
 
         if self.config.alternate:
             updating_critique = self.updating_critic
-            alternate_info = {"total_steps": self.total_steps, "last_change": self.last_change, "num_workers": self.config.num_workers}
+            alternate_info = {"total_steps": self.total_steps, "last_change": self.last_change,
+                              "num_workers": self.config.num_workers, 'sceptic_period': config.sceptic_period}
             alternate_info.update(logger.tracked_scalars)
+
+            if config.track_critic_vals:
+                alternate_info.update({"critic_variance":self.critic_loss_variance.get()/(config.baseline_avg_length/self.time_factor),
+                              "last_stable_critic": self.last_stable_critic_val,
+                                       "current_critic_val":self.critic_loss_baseline.get()})
+
             if(self.check_for_alternation(updating_critique, alternate_info)):
                 self.updating_critic = not updating_critique
                 self.last_change = self.total_steps
@@ -119,6 +143,10 @@ class FDRA2CAgent(BaseAgent):
                 self.actor_optimizer.step()
 
         else:
+            self.critic_optimizer.zero_grad()
+            self.actor_optimizer.zero_grad()
+            (policy_loss - config.entropy_weight * entropy_loss +
+            config.value_loss_weight * value_loss).backward()
             self.actor_optimizer.step()
             self.critic_optimizer.step()
 

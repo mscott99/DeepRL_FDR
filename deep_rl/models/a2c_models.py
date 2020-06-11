@@ -1,6 +1,7 @@
 from deep_rl import *
 from deep_rl import run_steps
 from deep_rl.optimizer import FDR_quencher
+from math import sqrt
 
 
 def a2c_feature(**kwargs):
@@ -92,16 +93,31 @@ def check_alternate_interval_by_num_steps(interval_length, critic_updating: bool
     else:
         return False
 
+def check_alternate_cFDR_critic_loss(X_threshold_critic, critic_tolerance, to_actor_callback, to_critic_callback, critic_updating, info):
+    """update actor and critic only upon convergence of the other"""
 
-def check_alternate_by_cFDR(X_threshold_actor, X_threshold_critic, reset_actor, reset_critic, critic_updating, info):
+    if(info['total_steps'] - info['last_change'] > info['sceptic_period']):
+        if critic_updating:
+            if (info['dFDR_critic'].get() < X_threshold_critic):
+                to_actor_callback()
+                return True
+        else:
+            critic_distance = (info['current_critic_val']-info['last_stable_critic'])/sqrt(info['critic_variance'])
+            if critic_distance > critic_tolerance:
+                to_critic_callback()
+                return True
+    return False
+
+
+def check_alternate_by_cFDR(X_threshold_actor, X_threshold_critic, to_critic_callback, to_actor_callback, critic_updating, info):
     """update actor and critic only upon convergence of the other"""
     if critic_updating:
         if (info['dFDR_critic'].get() < X_threshold_critic):
-            reset_critic()
+            to_actor_callback()
             return True
     else:
         if (info['dFDR_actor'].get() < X_threshold_actor):
-            reset_actor()
+            to_critic_callback()
             return True
     return False
 
@@ -145,7 +161,7 @@ class Small_A2C_FDR(Model):
         config.use_gae = False
         # config.entropy_weight = 0.01
         config.alternate = True
-        config.check_for_alternation = lambda *args: check_alternate_by_cFDR(1,1, *args)
+        config.check_for_alternation = lambda *args: check_alternate_by_cFDR(config['X'], config['X'], *args)
         #config.check_for_alternation = lambda *params: check_alternate_by_cFDR(0.2, 0.2, *params)
         config.rollout_length = 5
         #config.gradient_clip = 0.5
@@ -174,7 +190,6 @@ class FDR_A2C_RMS(Small_A2C_FDR):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         config= self.config
-        config.entropy_weight = 0.1
         config.alternate=False
         #Override when arguments are given from the running configuration
         config.network_fn = lambda logger=None: CategoricalDissociatedActorCriticNet(
@@ -189,46 +204,8 @@ class FDR_A2C_RMS(Small_A2C_FDR):
         )
         config.merge(kwargs)
 
-
-class Small_A2C_FDR_param_tuning(Model):
-
-    def __init__(self, lr_actor, lr_critic, hidden_actor_layers,
-                 hidden_critic_layers, change_interval, **kwargs):
-        generate_tag(kwargs)
-        kwargs.setdefault('log_level', 0)
-        config = Config()
-
-        config.merge(kwargs)
-        # config.num_workers = 3
-        config.task_fn = lambda: Task(config.game, num_envs=config.num_workers)
-        config.eval_env = Task(config.game)
-        config.optimizer_fn = lambda params: torch.optim.RMSprop(params, 0.001)
-        config.network_fn = lambda logger=None: CategoricalDissociatedActorCriticNet(
-            config.state_dim,
-            config.action_dim,
-            # actor_opt_fn=lambda params,
-            #    logger=None: torch.optim.RMSprop(params, lr_actor),
-            actor_opt_fn=lambda params, logger=None: FDR_quencher(params, lr_init=lr_critic, momentum=0.9, dampening=0,
-                                                                  weight_decay=0.001, t_adaptive=700, X=0.01, Y=0.9,
-                                                                  logger=logger, tag="actor"),
-            critic_opt_fn=lambda params,
-                                 logger=None: FDR_quencher(params, lr_init=lr_critic,
-                                                           momentum=0.9, dampening=0,
-                                                           weight_decay=0.001, t_adaptive=700, X=0.01, Y=0.9,
-                                                           logger=logger, tag="critic"),
-            phi_body=None,
-            actor_body=FCBody(4, hidden_units=hidden_actor_layers, gate=torch.tanh),
-            critic_body=FCBody(4, hidden_units=hidden_critic_layers, gate=torch.tanh),
-            logger=logger
-        )
-        # config.discount = 0.99
-        config.use_gae = False
-        # config.entropy_weight = 0.01
-        config.rollout_length = 5
-        # config.gradient_clip = 0.5
-        config.log_interval = 1e4
-        # config.max_steps = 5e5
-        config.alternate = True
-        config.check_for_alternation = lambda *params: check_alternate_by_cFDR(0.2,0.2, *params)
-        self.agent = FDRA2CAgent(config)
-
+class FDR_A2C_critic_loss_change(Small_A2C_FDR):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        config = self.config
+        config.check_for_alternation = lambda *args: check_alternate_cFDR_critic_loss(config.X, config.critic_loss_tolerance, *args)

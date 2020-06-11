@@ -45,7 +45,10 @@ class FDR_quencher(Optimizer):
         self.time_factor = time_factor
         self.baseline_avg_length = baseline_avg_length
         self.dFDR_avg_length = dFDR_avg_length
+        self.Y = Y
         self.reset_stats()
+        for group in self.param_groups:
+            group['lr'] = lr_init
         #time_factor: num steps per update of FDR
 
     def __setstate__(self, state):
@@ -205,7 +208,7 @@ class FDR_quencher(Optimizer):
 
     def reset_stats(self):
         for group in self.param_groups:
-            group['lr'] = self.lr_init
+            group['lr'] = group['lr']*self.Y
             # Purge running record of observables
             group['OLs'] = list()
             group['ORs'] = list()
