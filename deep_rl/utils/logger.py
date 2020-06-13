@@ -12,7 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s: %(message)s'
 from .misc import *
 
 
-def get_logger(tag='default', log_level=0):
+def get_logger(tag='default', log_level=0, save_folder="default"):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     if tag is not None:
@@ -20,7 +20,7 @@ def get_logger(tag='default', log_level=0):
         fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s'))
         fh.setLevel(logging.INFO)
         logger.addHandler(fh)
-    return Logger(logger, './tf_log/logger-%s-%s' % (tag, get_time_str()), log_level)
+    return Logger(logger, './tf_log/%s/logger-%s-%s' % (save_folder, tag, get_time_str()), log_level)
 
 
 class Logger(object):

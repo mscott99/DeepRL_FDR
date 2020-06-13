@@ -59,7 +59,7 @@ class Config:
         self.async_actor = True
         self.tasks = False
         self.alternate = False
-        self.check_for_alternation = None
+        self.check_for_alternation_callback = lambda:None
         self.log_keywords = []
         self.actor_hidden_units = (16,16)
         self.critic_hidden_units = (16,16)
@@ -72,11 +72,14 @@ class Config:
         self.X = 0.01
         self.Y = 0.9
         self.t_adaptive = 100
-        self.baseline_avg_length = 1000.0
+        self.baseline_avg_length = 1000.0 #unit: number of states. This is the number of states until the weight is 1/e
         self.dFDR_avg_length = 1000.0
         self.critic_loss_tolerance = 3.0
         self.track_critic_vals=False
-        self.sceptic_period = 0
+        self.sceptic_period = 0 #minimal period for average to run before taking averages into account
+        self.n_actor = 0
+        self.stop_at_victory=False
+        self.group_tag = "default_group"
         #dont believe average before  sceptic_period has expired
     @property
     def eval_env(self):

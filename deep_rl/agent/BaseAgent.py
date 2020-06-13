@@ -15,7 +15,7 @@ from skimage.io import imsave
 class BaseAgent:
     def __init__(self, config):
         self.config = config
-        self.logger = get_logger(tag=config.tag, log_level=config.log_level)
+        self.logger = get_logger(tag=config.tag, log_level=config.log_level, save_folder=config.group_tag)
         self.task_ind = 0
 
     def close(self):
@@ -60,17 +60,19 @@ class BaseAgent:
             'episodic_return_test': np.mean(episodic_returns),
         }
 
-    def record_online_return(self, info, offset=0):
-        self.logger.write_all_tracked_scalars(step = self.total_steps+ offset)
+    def record_online_return(self, info, returns_vessel= None,offset=0):
+        #self.logger.write_all_tracked_scalars(step = self.total_steps + offset)
         if isinstance(info, dict):
             ret = info['episodic_return']
             if ret is not None:
                 self.logger.update_log_value('episodic_return_train',ret)
+                if returns_vessel is not None:
+                    returns_vessel.append(ret)
                 #self.logger.add_scalar('episodic_return_train', ret, self.total_steps + offset)
                 #self.logger.info('steps %d, episodic_return_train %s' % (self.total_steps + offset, ret))
         elif isinstance(info, tuple):
             for i, info_ in enumerate(info):
-                self.record_online_return(info_, i)
+                self.record_online_return(info_, returns_vessel=returns_vessel, offset=i)
         else:
             raise NotImplementedError
 

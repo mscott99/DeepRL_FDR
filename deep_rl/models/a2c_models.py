@@ -49,7 +49,7 @@ class Model:
         env.env.close()
 
     def train(self):
-        run_steps(self.agent)
+        return run_steps(self.agent)
 
 
 class SmallA2CFeature(Model):
@@ -93,36 +93,58 @@ def check_alternate_interval_by_num_steps(interval_length, critic_updating: bool
     else:
         return False
 
-def check_alternate_cFDR_critic_loss(X_threshold_critic, critic_tolerance, to_actor_callback, to_critic_callback, critic_updating, info):
+def check_alternate_cFDR_critic_loss(critic_tolerance, critic_updating, info):
     """update actor and critic only upon convergence of the other"""
 
     if(info['total_steps'] - info['last_change'] > info['sceptic_period']):
         if critic_updating:
-            if (info['dFDR_critic'].get() < X_threshold_critic):
-                to_actor_callback()
+            critic_optimizer = info['critic_optimizer']
+            if critic_optimizer.change_learner:
+                critic_optimizer.change_learner = False
+                critic_optimizer.reset_stats()
                 return True
         else:
             critic_distance = (info['current_critic_val']-info['last_stable_critic'])/sqrt(info['critic_variance'])
             if critic_distance > critic_tolerance:
-                to_critic_callback()
+                info['actor_optimizer'].reset_stats()
                 return True
     return False
 
 
-def check_alternate_by_cFDR(X_threshold_actor, X_threshold_critic, to_critic_callback, to_actor_callback, critic_updating, info):
+def check_alternate_by_cFDR(critic_updating, info):
     """update actor and critic only upon convergence of the other"""
     if critic_updating:
-        if (info['dFDR_critic'].get() < X_threshold_critic):
-            to_actor_callback()
+        critic_optimizer = info['critic_optimizer']
+        if critic_optimizer.change_learner:
+            critic_optimizer.change_learner = False
+            critic_optimizer.reset_stats()
             return True
     else:
-        if (info['dFDR_actor'].get() < X_threshold_actor):
-            to_critic_callback()
+        actor_optimizer = info['actor_optimizer']
+        if (actor_optimizer.change_learner):
+            actor_optimizer.change_learner = False
+            actor_optimizer.reset_stats()
             return True
     return False
 
+
+def check_alternate_partial_cFDR(critic_updating, info):
+    """update actor and critic only upon convergence of the other"""
+    critic_optimizer = info['critic_optimizer']
+    if critic_updating and critic_optimizer.change_learner:
+            critic_optimizer.change_learner = False
+            critic_optimizer.reset_stats()
+            return True
+    elif info['total_steps'] - info['last_change'] > info['n_actor']:
+        info['actor_optimizer'].reset_stats()
+        return True
+    else:
+        return False
+
+
 def check_alternate_stuck(reset_actor, reset_critic, critic_updating, info):
     return False
+
 
 class Small_A2C_FDR(Model):
     """Parent model, make children for more specific implementation"""
@@ -161,7 +183,7 @@ class Small_A2C_FDR(Model):
         config.use_gae = False
         # config.entropy_weight = 0.01
         config.alternate = True
-        config.check_for_alternation = lambda *args: check_alternate_by_cFDR(config['X'], config['X'], *args)
+        config.check_for_alternation_callback = check_alternate_by_cFDR
         #config.check_for_alternation = lambda *params: check_alternate_by_cFDR(0.2, 0.2, *params)
         config.rollout_length = 5
         #config.gradient_clip = 0.5
@@ -204,8 +226,17 @@ class FDR_A2C_RMS(Small_A2C_FDR):
         )
         config.merge(kwargs)
 
+
+class FDR_A2C_partial(Small_A2C_FDR):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        config= self.config
+        config.alternate = True
+        config.check_for_alternation_callback = check_alternate_partial_cFDR
+
+
 class FDR_A2C_critic_loss_change(Small_A2C_FDR):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         config = self.config
-        config.check_for_alternation = lambda *args: check_alternate_cFDR_critic_loss(config.X, config.critic_loss_tolerance, *args)
+        config.check_for_alternation_callback = lambda *args: check_alternate_cFDR_critic_loss(config.X, config.critic_loss_tolerance, *args)

@@ -7,6 +7,7 @@
 from .BaseAgent import *
 from ..component import *
 from ..network import *
+from collections import deque
 from math import sqrt
 
 class FDRA2CAgent(BaseAgent):
@@ -23,6 +24,11 @@ class FDRA2CAgent(BaseAgent):
         self.time_factor = (config.num_workers*config.rollout_length)
         self.states = self.task.reset()
         self.init_logger(config.log_keywords)
+        self.episode_count=0
+
+        #specific to Cartpole, check for completion
+        if config.game == "CartPole-v0" and config.stop_at_victory:
+            self.last_100_returns = deque([0 for i in range(100)],maxlen=100)
 
         if config.track_critic_vals:
             self.critic_loss_baseline = RunningAvg(config.baseline_avg_length/self.time_factor)
@@ -34,20 +40,7 @@ class FDRA2CAgent(BaseAgent):
             #and check_for_alternation checks if requisite conditions are in place to change training.
             self.last_change = 0
             self.updating_critic=True
-
-            #build transition functions
-            to_critic_callback = lambda:None
-            to_actor_callback = lambda:None
-            if(hasattr(self.actor_optimizer, "reset_stats")):
-                to_critic_callback = self.actor_optimizer.reset_stats
-            if(hasattr(self.critic_optimizer, "reset_stats")):
-                to_actor_callback = self.critic_optimizer.reset_stats
-            if config.track_critic_vals:
-                to_actor_callback_final = lambda: call_two_fn(to_actor_callback, lambda: self.assign_stable_critic_loss())
-
-            #set check for alternation function
-            self.check_for_alternation = lambda critic_updating, info: self.config.check_for_alternation(
-                to_critic_callback, to_actor_callback_final, critic_updating, info)
+            self.check_for_alternation = config.check_for_alternation_callback
 
     def init_logger(self, keywords):
         logger = self.logger
@@ -70,11 +63,16 @@ class FDRA2CAgent(BaseAgent):
         storage = Storage(config.rollout_length)
         states = self.states
         logger = self.logger
+        episode_count = self.episode_count
         for _ in range(config.rollout_length):
             prediction = self.network(config.state_normalizer(states))
             next_states, rewards, terminals, info = self.task.step(to_np(prediction['a']))
+            episode_count += np.count_nonzero(terminals)
             logger.update_log_value("action", float(to_np(prediction['a'])[0]))
-            self.record_online_return(info)
+            if config.game == "CartPole-v0" and config.stop_at_victory:
+                self.record_online_return(info, returns_vessel=self.last_100_returns)
+            else:
+                self.record_online_return(info)
             rewards = config.reward_normalizer(rewards)
             storage.add(prediction)
             storage.add({'r': tensor(rewards).unsqueeze(-1),
@@ -82,6 +80,8 @@ class FDRA2CAgent(BaseAgent):
             states = next_states
             self.total_steps += config.num_workers
 
+
+        self.episode_count = episode_count
         self.states = states
         prediction = self.network(config.state_normalizer(states))
         storage.add(prediction)
@@ -99,28 +99,39 @@ class FDRA2CAgent(BaseAgent):
             storage.adv[i] = advantages.detach()
             storage.ret[i] = returns.detach()
 
+        if config.stop_at_victory and config.game == 'CartPole-v0' and np.mean(self.last_100_returns) >= 195:
+            #solved
+            return self.total_steps
+
         log_prob, value, returns, advantages, entropy = storage.cat(['log_pi_a', 'v', 'ret', 'adv', 'ent'])
         policy_loss = -(log_prob * advantages).mean()
         value_loss = 0.5 * (returns - value).pow(2).mean()
-        self.critic_loss_variance.add((policy_loss-self.critic_loss_baseline.get())**2)
-        self.critic_loss_baseline.add(policy_loss)
+        if config.track_critic_vals:
+            self.critic_loss_variance.add((policy_loss-self.critic_loss_baseline.get())**2)
+            self.critic_loss_baseline.add(policy_loss)
         entropy_loss = entropy.mean()
+
+        #log values that are logged on a per-step basis
         logger.update_log_value('critic_loss', value_loss.item())
         logger.update_log_value('actor_loss', policy_loss.item())
+        logger.update_log_value("episode_count", episode_count)
+        logger.write_all_tracked_scalars(step=self.total_steps)
 
         #(policy_loss - config.entropy_weight * entropy_loss +
         #config.value_loss_weight * value_loss).backward()
         #(policy_loss +
         # config.value_loss_weight * value_loss).backward()
 
-
+        #alternate learning between actor and critic
         if self.config.alternate:
             updating_critique = self.updating_critic
             alternate_info = {"total_steps": self.total_steps, "last_change": self.last_change,
-                              "num_workers": self.config.num_workers, 'sceptic_period': config.sceptic_period}
-            alternate_info.update(logger.tracked_scalars)
+                              "num_workers": config.num_workers, "sceptic_period": config.sceptic_period,
+                              "critic_optimizer": self.critic_optimizer, "actor_optimizer": self.actor_optimizer,
+                              "n_actor": config.n_actor}
 
             if config.track_critic_vals:
+                #track critic loss to determine if learning should be switched back to the critic
                 alternate_info.update({"critic_variance":self.critic_loss_variance.get()/(config.baseline_avg_length/self.time_factor),
                               "last_stable_critic": self.last_stable_critic_val,
                                        "current_critic_val":self.critic_loss_baseline.get()})
@@ -136,18 +147,28 @@ class FDRA2CAgent(BaseAgent):
                     nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
                 self.critic_optimizer.step()
             else:
-                self.actor_optimizer.zero_grad()
-                (policy_loss - config.entropy_weight*entropy_loss).backward()
-                if config.gradient_clip is not None:
-                    nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
-                self.actor_optimizer.step()
+                #self.actor_optimizer.zero_grad()
+                #(policy_loss - config.entropy_weight*entropy_loss).backward()
+                #if config.gradient_clip is not None:
+                #    nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
+                #self.actor_optimizer.step()
 
+                #update both actor and critic
+                self.critic_optimizer.zero_grad()
+                self.actor_optimizer.zero_grad()
+                (policy_loss - config.entropy_weight * entropy_loss +
+                 config.value_loss_weight * value_loss).backward()
+                self.actor_optimizer.step()
+                self.critic_optimizer.step()
         else:
+            #not alternating: update everything
             self.critic_optimizer.zero_grad()
             self.actor_optimizer.zero_grad()
             (policy_loss - config.entropy_weight * entropy_loss +
             config.value_loss_weight * value_loss).backward()
             self.actor_optimizer.step()
             self.critic_optimizer.step()
+
+        return False #By default we are not done
 
 

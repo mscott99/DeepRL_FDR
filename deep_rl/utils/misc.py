@@ -29,8 +29,10 @@ def run_steps(agent):
             agent.eval_episodes()
         if config.max_steps and agent.total_steps >= config.max_steps:
             agent.close()
-            break
-        agent.step()
+            return agent.total_steps
+        done = agent.step()
+        if done:
+            return agent.total_steps
         agent.switch_task()
 
 

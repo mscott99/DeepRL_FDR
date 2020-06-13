@@ -47,6 +47,10 @@ class FDR_quencher(Optimizer):
         self.dFDR_avg_length = dFDR_avg_length
         self.Y = Y
         self.reset_stats()
+        self.change_learner = False #signal
+        #self.reduce_num = 1 #number of times to reduce lr before passing the ball
+        #self.reduced_so_far = 0 # number of time lr was reduced
+
         for group in self.param_groups:
             group['lr'] = lr_init
         #time_factor: num steps per update of FDR
@@ -167,48 +171,49 @@ class FDR_quencher(Optimizer):
                         logger.update_log_value(val[0], val[1])
 
             # FDR adaptive step
-            if (t % t_adaptive) == 0:
+            #if (t % t_adaptive) == 0:
 
                 # Fluctuation-dissipation observables
-                OLs = group['OLs']
-                ORs = group['ORs']
+            #    OLs = group['OLs']
+            #    ORs = group['ORs']
 
                 # Compute half-running time average
-                transient_cut = int(np.floor(0.5 * t))
-                OLbar = np.mean(OLs[transient_cut:t])
-                ORbar = np.mean(ORs[transient_cut:t])
+            #    transient_cut = int(np.floor(0.5 * t))
+            #    OLbar = np.mean(OLs[transient_cut:t])
+            #    ORbar = np.mean(ORs[transient_cut:t])
 
                 # FDR adaptive scheduling hyperparameters
-                X = group['X']
-                Y = group['Y']
+            #    X = group['X']
+            #    Y = group['Y']
 
                 # Adapt if sufficiently close to equilibrium
-                cFDR = np.abs((OLbar / ORbar) - 1.0)
+            #    cFDR = np.abs((OLbar / ORbar) - 1.0)
 
                 # track the cFDR variable
-                if logger is not None:
-                    vals = [("cFDR",cFDR)]
+            #    if logger is not None:
+            #        vals = [("cFDR",cFDR)]
 
-                    if self.tag is not None:
-                        tag = self.tag
-                        for val in vals:
-                            logger.update_log_value(val[0]+"_" + tag, val[1])
-                    else:
-                        for val in vals:
-                            logger.update_log_value(val[0], val[1])
+            #        if self.tag is not None:
+            #            tag = self.tag
+            #            for val in vals:
+            #                logger.update_log_value(val[0]+"_" + tag, val[1])
+            #       else:
+            #            for val in vals:
+            #                logger.update_log_value(val[0], val[1])
                 # In order to peek into what is going on behind the scene, please uncomment the following
                 # print('time=%d, cFDR=%.3f, lr=%.3f\n' % (group['t'], cFDR, group['lr']))
 
                 # If close to equilibrium, decrease the learning rate
-                if cFDR < X:
-                    # Quench
-                    group['lr'] *= (1.0 - Y)
 
-                    self.reset_group_calculation_of_cFDR(group)
+            if dFDR < group['X']:
+                    # Quench
+                group['lr'] *= (1.0 - self.Y)
+                logger.update_log_value("lr_" + self.tag, group['lr'])
+                self.change_learner = True
+                self.reset_stats()
 
     def reset_stats(self):
         for group in self.param_groups:
-            group['lr'] = group['lr']*self.Y
             # Purge running record of observables
             group['OLs'] = list()
             group['ORs'] = list()
@@ -223,5 +228,7 @@ class FDR_quencher(Optimizer):
         group['OLs'] = list()
         group['ORs'] = list()
 
+        group['dORbar'] = RunningAvg(int(self.dFDR_avg_length / self.time_factor))  # to avoid division by zero
+        group['dOLbar'] = RunningAvg(int(self.dFDR_avg_length / self.time_factor))
         # Reset time
         group['t'] = 0

@@ -69,6 +69,14 @@ def estimator_fn(params, num_evals):
     ret = ret / num_evals
     return ret, model
 
+def estimate_by_completion(params):
+    model = params['model_class'](**params)
+    model.initialize()
+    # model.agent.load('data/final_model_300000_4')
+    score = - model.train()
+
+    return score, model
+
 def sample_params(params_dist):
     result={}
     for key, val in params_dist.items():
@@ -94,7 +102,7 @@ def run_single(params, num_evals, values_in_tag=[], model_index=None, save_all_p
     save_folder = 'data/' + params['group_tag']+'/'
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
-    score, model = estimator_fn(params, num_evals)
+    score, model = estimate_by_completion(params)
     model.agent.save(save_folder + params['tag'])
 
     if save_all_params:
@@ -110,7 +118,7 @@ def run_single(params, num_evals, values_in_tag=[], model_index=None, save_all_p
 
 class Leaderboard:
     def __init__(self, size, save_folder='data/', params_file_name='parameters.json'):
-        self.board = [("", -10000, None) for i in range(size)]  # first is best
+        self.board = [("", -1e9, None) for i in range(size)]  # first is best
         self.size = size
         self.save_folder = save_folder
         self.params_file_name = params_file_name
@@ -126,13 +134,15 @@ class Leaderboard:
             leaderboard = sorted(leaderboard, key=lambda obj: obj[0], reverse=True)
             model.agent.save(self.save_folder + model.agent.config.tag)
             with open(self.save_folder + self.params_file_name, 'w+') as file:
-                json.dump(leaderboard, file)
+                json.dump(leaderboard, file, default=lambda o:o.__name__)
         else:
             purge_model_logging(model.agent.config.tag)
 
 
-def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, tune_tag="default_hyp_tune_tag", data_folder="hyp_results/", values_in_tag=[]):
+def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
     """params_dist values should be iterables"""
+    if follow_all_tuned:
+        values_in_tag = list(params_dist.keys())
     leaderboard = Leaderboard(leaderboard_size, save_folder='data/'+const_params['group_tag']+'/', params_file_name=const_params['group_tag']+ '.json')
     keys, values = zip(*params_dist.items())
     for i,bundle in enumerate(product(*values)):
@@ -142,20 +152,21 @@ def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, tu
         leaderboard.add(score, params,model)
 
 
-def randomised_tune_params(params_dist, const_params,num_tests , num_evals, leaderboard_size=5, values_in_tag=[]):
+def randomised_tune_params(params_dist, const_params, num_tests , num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
     """params_dist elements should implement the sample() function"""
+    if follow_all_tuned:
+        values_in_tag = list(params_dist.keys())
     leaderboard = Leaderboard(leaderboard_size, save_folder='data/'+const_params['group_tag']+'/', params_file_name=const_params['group_tag']+ '.json')
     for i in range(num_tests):
         params = sample_params(params_dist)
         params.update(const_params)
-        score, model = run_single(params, num_evals, values_in_tag, model_index=i, save_all_params=False)
+        score, model = run_single(params, num_evals, values_in_tag=values_in_tag, model_index=i, save_all_params=False)
         leaderboard.add(score, params,model)
 
 
-def listed_tune_params(params_list, const_params,num_evals, leaderboard_size=5, follow_all_tuned=True, values_in_tag=[]):
+def listed_tune_params(params_list, const_params,num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
     if follow_all_tuned:
         values_in_tag = list(params_list[0].keys())
-
     leaderboard = Leaderboard(leaderboard_size, save_folder='data/' + const_params['group_tag'] + '/',
                               params_file_name=const_params['group_tag'] + '.json')
     for i,params in enumerate(params_list):
@@ -177,26 +188,30 @@ def start_generic_run():
 
 if __name__ == "__main__":
     start_generic_run()
-    const_params={'model_class':FDR_A2C_critic_loss_change,
-                  'track_critic_vals':True,
-                  'critic_loss_tolerance':3.5,
+    # TODO: allow dict with non-jsonifiable attributes to be put in json format
+    params_dist = {
+        'critic_lr': finite_dist([0.3,0.1,0.05]),
+        'actor_lr': finite_dist([0.3,0.1,0.05]),
+        'X' : finite_dist([2,1, 0.5, 0.3]),
+        'Y': finite_dist([0.2,0.5, 0.9]),
+        'n_actor': finite_dist([1e2, 1e3, 1e4, 1e5]),
+        'baseline_avg_length':finite_dist([5e3,1e4,1e5])
+    }
+
+    const_params={'model_class':FDR_A2C_partial,
+                  'track_critic_vals':False,
                   'game':'CartPole-v0',
-                  'max_steps': 1e6,
-                  'tag':'cartPole_critic_loss_change_sceptic_higher_lr',
-                  'group_tag':'critic_sceptic',
+                  'max_steps': 2e5,
+                  'tag':'cart_part',
+                  'group_tag':'cartpole_partial_v3',
                   #'log_keywords':[('critic_loss',0),("episodic_return_train",0),('action',0),('dFDR_critic',0),('dFDR_actor',0),('Base_Theta_critic',0),('OL_critic',0),('OR_critic',0)],
-                  'log_keywords':[('critic_loss',0),('actor_loss',0),('action',0),('episodic_return_train',0), ('dFDR_actor',0), ('dFDR_critic',0),('OL_critic',0),('OR_critic',0)],
-                  'X':0.2,
-                  'baseline_avg_length':2e4,
-                  'dFDR_avg_length':2e4,
-                  'critic_lr':0.1,
-                  'actor_lr':0.1,
-                  'sceptic_period':500
+                  'log_keywords':[('critic_loss',0),('actor_loss',0),('episodic_return_train',0), ('dFDR_critic',0),('OL_critic',0),('OR_critic',0), ('episode_count',0), ('lr_critic',0), ('lr_actor',0)],
+                  'baseline_avg_length':1e4,
+                  'dFDR_avg_length':1e4,
+                  'stop_at_victory':True
                   }
 
-
-
-    run_single(const_params,num_evals=10, values_in_tag=[], save_all_params=True)
+    randomised_tune_params(params_dist, const_params, leaderboard_size=10, num_tests=100,num_evals=10, values_in_tag=['n_actor', 'X', 'critic_lr', 'actor_lr'], follow_all_tuned=True)
     #grid_tune_params(Small_A2C_FDR, grid_search_entropy, const_params, num_evals=10, leaderboard_size=10, tune_tag="acrobat_long_run", data_folder="acrobot_long/", values_in_tag=['max_steps'])
     #randomised_tune_params(estimator_fn, search_config, num_tests=20, train_length=int(100), test_length=int(5), leaderboard_size=3, tune_version=0)
 
