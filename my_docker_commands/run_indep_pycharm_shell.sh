@@ -4,6 +4,7 @@ docker run --rm -it\
 	--name hello_Ngan \
 	-v /tmp/.X11-unix:/tmp/.X11-unix\
 	-v $XAUTHORITY:/shaang/.Xauthority\
+	-v ~/programming/machine_learning/paper_actor_critic/DeepRL/:/root/DeepRL\
 	-v `pwd`:/shaang/DeepRL\
 	--entrypoint /bin/bash\
-	opt_params:0.1
+	fresh_root:0.1

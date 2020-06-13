@@ -219,7 +219,7 @@ def run_half_cheetah():
     params = {      'model_class': FDR_A2C_partial,
                     'track_critic_vals': False,
                     'game': 'HalfCheetah-v2',
-                    'max_steps': 1e6,
+                    'max_steps': 1e3,
                     'tag': 'debug',
                     'group_tag': 'debug',
                     'log_keywords': [('critic_loss', 0), ('actor_loss', 0), ('episodic_return_train', 0),
