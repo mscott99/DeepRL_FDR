@@ -4,7 +4,7 @@ from itertools import product
 import json
 import os, re
 import bisect
-from sklearn.model_selection import RandomizedSearchCV
+#from sklearn.model_selection import RandomizedSearchCV
 
 class finite_dist:
     def __init__(self, a):
@@ -83,15 +83,14 @@ def sample_params(params_dist):
         result[key] = val.sample()
     return result
 
-#def try_all_params_iter(params_dist):
 
-def purge_model_logging(model_name):
-    purge('data', "^" + model_name)
-    purge('tf_log', "^" + "logger-" + model_name)
-    purge('log', "^" + model_name)
+def purge_model_logging(dir_name, file_name):
+    purge('data' + '/' + dir_name, "^" + file_name)
+    purge('tf_log' + '/' + dir_name, "^" + "logger-" + file_name)
+    purge('log', "^" + file_name)
 
 
-def run_single(params, num_evals, values_in_tag=[], model_index=None, save_all_params=False):
+def run_single(params, values_in_tag=[], model_index=None, save_all_params=False):
 
     if len(values_in_tag) > 0:
         params['tag']= params['tag'] + ('_').join([str(key) + '_' + str(params[key]) for key in values_in_tag])
@@ -126,12 +125,13 @@ class Leaderboard:
     def add(self, score, params, model):
         leaderboard = self.board
         size = self.size
-        if score > leaderboard[size - 1][1]:
-            model_to_delete = leaderboard[size - 1]
+        if score >= leaderboard[size-1][1]:
+            model_to_delete = leaderboard[size-1]
             if model_to_delete[2] is not None:
-                purge_model_logging(model_to_delete[0])
-            leaderboard[size - 1] = (model.agent.config.tag, score, params)
-            leaderboard = sorted(leaderboard, key=lambda obj: obj[0], reverse=True)
+                purge_model_logging(model_to_delete[2]['group_tag'], model_to_delete[0])
+            leaderboard[size-1] = (model.agent.config.tag, score, params)
+            leaderboard = sorted(leaderboard, key=lambda obj: obj[1], reverse=True)
+            self.board = leaderboard
             model.agent.save(self.save_folder + model.agent.config.tag)
             with open(self.save_folder + self.params_file_name, 'w+') as file:
                 json.dump(leaderboard, file, default=lambda o:o.__name__)
@@ -186,32 +186,61 @@ def start_generic_run():
     select_device(-1)
     # select_device(0)
 
-if __name__ == "__main__":
-    start_generic_run()
-    # TODO: allow dict with non-jsonifiable attributes to be put in json format
+
+def tun_n_steps():
     params_dist = {
-        'critic_lr': finite_dist([0.3,0.1,0.05]),
-        'actor_lr': finite_dist([0.3,0.1,0.05]),
-        'X' : finite_dist([2,1, 0.5, 0.3]),
-        'Y': finite_dist([0.2,0.5, 0.9]),
+        'critic_lr': finite_dist([0.3, 0.1, 0.05, 0.01]),
+        'actor_lr': finite_dist([0.3, 0.1, 0.05]),
+        'X': finite_dist([2, 1, 0.5, 0.3]),
+        'Y': finite_dist([0.2, 0.5, 0.9]),
         'n_actor': finite_dist([1e2, 1e3, 1e4, 1e5]),
-        'baseline_avg_length':finite_dist([5e3,1e4,1e5])
+        'baseline_avg_length': finite_dist([5e3, 1e4, 1e5])
     }
 
-    const_params={'model_class':FDR_A2C_partial,
-                  'track_critic_vals':False,
-                  'game':'CartPole-v0',
-                  'max_steps': 2e5,
-                  'tag':'cart_part',
-                  'group_tag':'cartpole_partial_v3',
-                  #'log_keywords':[('critic_loss',0),("episodic_return_train",0),('action',0),('dFDR_critic',0),('dFDR_actor',0),('Base_Theta_critic',0),('OL_critic',0),('OR_critic',0)],
-                  'log_keywords':[('critic_loss',0),('actor_loss',0),('episodic_return_train',0), ('dFDR_critic',0),('OL_critic',0),('OR_critic',0), ('episode_count',0), ('lr_critic',0), ('lr_actor',0)],
-                  'baseline_avg_length':1e4,
-                  'dFDR_avg_length':1e4,
-                  'stop_at_victory':True
-                  }
+    const_params = {'model_class': FDR_A2C_partial,
+                    'track_critic_vals': False,
+                    'game': 'CartPole-v0',
+                    'max_steps': 1e5,
+                    'tag': 'tag_cartpole',
+                    'group_tag': 'cartpole_partial_v5',
+                    'log_keywords': [('critic_loss', 0), ('actor_loss', 0), ('episodic_return_train', 0),
+                                     ('dFDR_critic', 0), ('OL_critic', 0), ('OR_critic', 0), ('episode_count', 0),
+                                     ('lr_critic', 0), ('lr_actor', 0)],
+                    'baseline_avg_length': 1e4,
+                    'dFDR_avg_length': 1e4,
+                    'stop_at_victory': True
+                    }
 
-    randomised_tune_params(params_dist, const_params, leaderboard_size=10, num_tests=100,num_evals=10, values_in_tag=['n_actor', 'X', 'critic_lr', 'actor_lr'], follow_all_tuned=True)
+    randomised_tune_params(params_dist, const_params, leaderboard_size=8, num_tests=1000, num_evals=10,
+                           values_in_tag=['n_actor', 'X', 'critic_lr', 'actor_lr'], follow_all_tuned=True)
+
+
+def run_half_cheetah():
+    params = {      'model_class': FDR_A2C_partial,
+                    'track_critic_vals': False,
+                    'game': 'HalfCheetah-v2',
+                    'max_steps': 1e6,
+                    'tag': 'debug',
+                    'group_tag': 'debug',
+                    'log_keywords': [('critic_loss', 0), ('actor_loss', 0), ('episodic_return_train', 0),
+                                     ('dFDR_critic', 0), ('OL_critic', 0), ('OR_critic', 0), ('episode_count', 0),
+                                     ('lr_critic', 0), ('lr_actor', 0)],
+                    'baseline_avg_length': 1e4,
+                    'dFDR_avg_length': 1e4,
+                    'stop_at_victory': True,
+                    'critic_lr': 0.05,
+                    'actor_lr':  0.05,
+                    'X': 0.3,
+                    'Y': 0.5,
+                    'n_actor': 1e3,
+                    'baseline_avg_length': 1e5
+                    }
+    run_single(params)
+
+if __name__ == "__main__":
+    start_generic_run()
+    run_half_cheetah()
+
     #grid_tune_params(Small_A2C_FDR, grid_search_entropy, const_params, num_evals=10, leaderboard_size=10, tune_tag="acrobat_long_run", data_folder="acrobot_long/", values_in_tag=['max_steps'])
     #randomised_tune_params(estimator_fn, search_config, num_tests=20, train_length=int(100), test_length=int(5), leaderboard_size=3, tune_version=0)
 

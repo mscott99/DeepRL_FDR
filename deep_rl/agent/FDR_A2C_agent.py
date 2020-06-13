@@ -156,7 +156,7 @@ class FDRA2CAgent(BaseAgent):
                 #update both actor and critic
                 self.critic_optimizer.zero_grad()
                 self.actor_optimizer.zero_grad()
-                (policy_loss - config.entropy_weight * entropy_loss +
+                (policy_loss - config.entropy_weight * entropy_loss+
                  config.value_loss_weight * value_loss).backward()
                 self.actor_optimizer.step()
                 self.critic_optimizer.step()
