@@ -14,12 +14,12 @@ class FDRA2CAgent(BaseAgent):
 
     def __init__(self, config):
         BaseAgent.__init__(self, config)
-        self.config = config
+        logger = self.logger
         self.task = config.task_fn()
         self.eval_task = config.eval_env
-        self.network = config.network_fn(logger=self.logger)
-        self.actor_optimizer = self.network.actor_opt
-        self.critic_optimizer = self.network.critic_opt
+        self.network = config.network_fn()
+        self.actor_optimizer = config.actor_optimizer_fn(self.network.actor_params, logger=logger)
+        self.critic_optimizer = config.critic_optimizer_fn(self.network.critic_params, logger=logger)
         self.total_steps = 0
         self.time_factor = (config.num_workers*config.rollout_length)
         self.states = self.task.reset()
@@ -68,7 +68,7 @@ class FDRA2CAgent(BaseAgent):
             prediction = self.network(config.state_normalizer(states))
             next_states, rewards, terminals, info = self.task.step(to_np(prediction['a']))
             episode_count += np.count_nonzero(terminals)
-            logger.update_log_value("action", float(to_np(prediction['a'])[0]))
+            logger.update_log_value("action", float(to_np(prediction['a'])[0,0]))
             if config.game == "CartPole-v0" and config.stop_at_victory:
                 self.record_online_return(info, returns_vessel=self.last_100_returns)
             else:

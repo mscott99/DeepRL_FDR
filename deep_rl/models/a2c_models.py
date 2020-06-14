@@ -1,3 +1,5 @@
+from gym.spaces import Discrete, Box
+
 from deep_rl import *
 from deep_rl import run_steps
 from deep_rl.optimizer import FDR_quencher
@@ -156,27 +158,32 @@ class Small_A2C_FDR(Model):
 
         config.num_workers = 8
         config.task_fn = lambda: Task(config.game, num_envs=config.num_workers)
-        config.eval_env = Task(config.game)
+        config.eval_env = Task(config.game) #This also sets characterisitics of the environment in the config dict
+        net_class = None
+        if type(config.action_space) == Discrete:
+            net_class = CategoricalActorCriticNet
+        elif type(config.action_space) == Box:
+            net_class = GaussianActorCriticNet
         #config.optimizer_fn = lambda params: torch.optim.RMSprop(params, 0.001)
-        config.network_fn = lambda logger=None: CategoricalDissociatedActorCriticNet(
+        config.network_fn = lambda: net_class(
             config.state_dim,
             config.action_dim,
-            #actor_opt_fn=lambda params, logger=None: torch.optim.RMSprop(params, 0.005),
-            actor_opt_fn=lambda params, logger=None: FDR_quencher(params, lr_init=config.actor_lr, momentum=config.actor_mom, dampening=config.actor_damp,
+            phi_body=None,
+            actor_body=config.actor_body,
+            critic_body=config.critic_body
+        )
+        config.actor_body = FCBody(config.state_dim, hidden_units=config.actor_hidden_units, gate=torch.relu)
+        config.critic_body = FCBody(config.state_dim, hidden_units=config.critic_hidden_units, gate=torch.relu)
+
+
+        config.actor_optimizer_fn = lambda params, logger=None: FDR_quencher(params, lr_init=config.actor_lr, momentum=config.actor_mom, dampening=config.actor_damp,
                                                                   weight_decay=0.001, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
                                                                   logger=logger, tag="actor",time_factor=config.rollout_length*config.num_workers,
-                                                                  baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length),
-
-            #critic_opt_fn=lambda params, logger=None: torch.optim.RMSprop(params, 0.005),
-            critic_opt_fn=lambda params, logger=None: FDR_quencher(params, lr_init=config.critic_lr, momentum=config.critic_mom, dampening=config.critic_damp,
+                                                                  baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length)
+        config.critic_optimizer_fn = lambda params, logger=None: FDR_quencher(params, lr_init=config.critic_lr, momentum=config.critic_mom, dampening=config.critic_damp,
                                                                    weight_decay=0.003, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
                                                                    logger=logger, tag="critic", time_factor=config.rollout_length*config.num_workers,
-                                                                   baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length),
-            phi_body=None,
-            actor_body=FCBody(config.state_dim, hidden_units=config.actor_hidden_units, gate=torch.tanh),
-            critic_body=FCBody(config.state_dim, hidden_units=config.critic_hidden_units, gate=torch.tanh),
-            logger=logger
-        )
+                                                                   baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length)
         config.discount = 0.98
         config.actor_hidden_units = (32,32)
         config.critic_hidden_units = (32,32)
@@ -213,17 +220,8 @@ class FDR_A2C_RMS(Small_A2C_FDR):
         super().__init__(**kwargs)
         config= self.config
         config.alternate=False
-        #Override when arguments are given from the running configuration
-        config.network_fn = lambda logger=None: CategoricalDissociatedActorCriticNet(
-            config.state_dim,
-            config.action_dim,
-            actor_opt_fn=lambda params, logger=None: torch.optim.RMSprop(params, config.actor_lr),
-            critic_opt_fn=lambda params, logger=None: torch.optim.RMSprop(params, config.critic_lr),
-            phi_body=None,
-            actor_body=FCBody(config.state_dim, hidden_units=config.actor_hidden_units, gate=torch.tanh),
-            critic_body=FCBody(config.state_dim, hidden_units=config.critic_hidden_units, gate=torch.tanh),
-            logger=logger
-        )
+        config.actor_optimizer_fn = lambda params: torch.optim.RMSprop(params, config.actor_lr),
+        config.critic_optimizer_fn= lambda params: torch.optim.RMSprop(params, config.critic_lr),
         config.merge(kwargs)
 
 
@@ -234,7 +232,12 @@ class FDR_A2C_partial(Small_A2C_FDR):
         config.alternate = True
         config.check_for_alternation_callback = check_alternate_partial_cFDR
 
-
+class FDR_A2C_partial_LSTM(FDR_A2C_partial):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        config = self.config
+        config.actor_body = LinearLSTMBody(config.state_dim)
+        config.critic_body = LinearLSTMBody(config.state_dim)
 class FDR_A2C_critic_loss_change(Small_A2C_FDR):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

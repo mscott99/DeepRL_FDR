@@ -80,6 +80,8 @@ class Config:
         self.n_actor = 0
         self.stop_at_victory=False
         self.group_tag = "default_group"
+        self.actor_body = None
+        self.critic_body = None
         #dont believe average before  sceptic_period has expired
     @property
     def eval_env(self):
@@ -91,6 +93,7 @@ class Config:
         self.state_dim = env.state_dim
         self.action_dim = env.action_dim
         self.task_name = env.name
+        self.action_space = env.action_space
 
     def add_argument(self, *args, **kwargs):
         self.parser.add_argument(*args, **kwargs)

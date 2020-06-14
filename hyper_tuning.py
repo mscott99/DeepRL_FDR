@@ -74,7 +74,6 @@ def estimate_by_completion(params):
     model.initialize()
     # model.agent.load('data/final_model_300000_4')
     score = - model.train()
-
     return score, model
 
 def sample_params(params_dist):
@@ -136,7 +135,7 @@ class Leaderboard:
             with open(self.save_folder + self.params_file_name, 'w+') as file:
                 json.dump(leaderboard, file, default=lambda o:o.__name__)
         else:
-            purge_model_logging(model.agent.config.tag)
+            purge_model_logging(model.config.group_tag, model.config.tag)
 
 
 def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
@@ -152,7 +151,7 @@ def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, va
         leaderboard.add(score, params,model)
 
 
-def randomised_tune_params(params_dist, const_params, num_tests , num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
+def randomised_tune_params(params_dist, const_params, num_tests , leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
     """params_dist elements should implement the sample() function"""
     if follow_all_tuned:
         values_in_tag = list(params_dist.keys())
@@ -160,7 +159,7 @@ def randomised_tune_params(params_dist, const_params, num_tests , num_evals, lea
     for i in range(num_tests):
         params = sample_params(params_dist)
         params.update(const_params)
-        score, model = run_single(params, num_evals, values_in_tag=values_in_tag, model_index=i, save_all_params=False)
+        score, model = run_single(params,values_in_tag=values_in_tag, model_index=i, save_all_params=False)
         leaderboard.add(score, params,model)
 
 
@@ -182,37 +181,59 @@ def start_generic_run():
     random_seed()
     select_device(-1)
     set_one_thread()
-    random_seed()
+    random_seed(seed=3)
     select_device(-1)
     # select_device(0)
 
 
-def tun_n_steps():
+def tune_n_steps():
     params_dist = {
         'critic_lr': finite_dist([0.3, 0.1, 0.05, 0.01]),
         'actor_lr': finite_dist([0.3, 0.1, 0.05]),
         'X': finite_dist([2, 1, 0.5, 0.3]),
         'Y': finite_dist([0.2, 0.5, 0.9]),
         'n_actor': finite_dist([1e2, 1e3, 1e4, 1e5]),
-        'baseline_avg_length': finite_dist([5e3, 1e4, 1e5])
+        'baseline_avg_length': finite_dist([5e3, 1e4, 1e5]),
     }
 
     const_params = {'model_class': FDR_A2C_partial,
                     'track_critic_vals': False,
                     'game': 'CartPole-v0',
                     'max_steps': 1e5,
-                    'tag': 'tag_cartpole',
-                    'group_tag': 'cartpole_partial_v5',
+                    'tag': 'debug',
+                    'group_tag': 'debug',
                     'log_keywords': [('critic_loss', 0), ('actor_loss', 0), ('episodic_return_train', 0),
                                      ('dFDR_critic', 0), ('OL_critic', 0), ('OR_critic', 0), ('episode_count', 0),
                                      ('lr_critic', 0), ('lr_actor', 0)],
-                    'baseline_avg_length': 1e4,
                     'dFDR_avg_length': 1e4,
                     'stop_at_victory': True
                     }
 
-    randomised_tune_params(params_dist, const_params, leaderboard_size=8, num_tests=1000, num_evals=10,
+    randomised_tune_params(params_dist, const_params, leaderboard_size=7, num_tests=1000000,
                            values_in_tag=['n_actor', 'X', 'critic_lr', 'actor_lr'], follow_all_tuned=True)
+
+def run_single_cartpole():
+    const_params = {'model_class': FDR_A2C_partial,
+                    'track_critic_vals': False,
+                    'game': 'HalfCheetah-v2',
+                    'max_steps': 1e5,
+                    'tag': 'debug',
+                    'group_tag': 'debug',
+                    'log_keywords': [('critic_loss', 0), ('actor_loss', 0), ('episodic_return_train', 0),
+                                     ('dFDR_critic', 0), ('OL_critic', 0), ('OR_critic', 0), ('episode_count', 0),
+                                     ('lr_critic', 0), ('lr_actor', 0)],
+                    'dFDR_avg_length': 1e4,
+                    'actor_hidden_units':(100,100),
+                    'critic_hidden_units':(100,100),
+                    'stop_at_victory': True,
+                    'critic_lr': 0.01,
+                    'actor_lr': 0.05,
+                    'X': 0.3,
+                    'Y': 0.9,
+                    'n_actor': 1e4,
+                    'baseline_avg_length': 1e5,
+    }
+    run_single(const_params)
 
 
 def run_half_cheetah():
@@ -233,13 +254,15 @@ def run_half_cheetah():
                     'X': 0.3,
                     'Y': 0.5,
                     'n_actor': 1e3,
-                    'baseline_avg_length': 1e5
+                    'entropy_weight':0.01
                     }
     run_single(params)
 
 if __name__ == "__main__":
     start_generic_run()
-    run_half_cheetah()
+    #run_half_cheetah()
+    #tune_n_steps()
+    run_single_cartpole()
 
     #grid_tune_params(Small_A2C_FDR, grid_search_entropy, const_params, num_evals=10, leaderboard_size=10, tune_tag="acrobat_long_run", data_folder="acrobot_long/", values_in_tag=['max_steps'])
     #randomised_tune_params(estimator_fn, search_config, num_tests=20, train_length=int(100), test_length=int(5), leaderboard_size=3, tune_version=0)

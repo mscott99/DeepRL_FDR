@@ -81,6 +81,17 @@ class OneLayerFCBodyWithAction(nn.Module):
         phi = self.gate(torch.cat([self.fc_s(x), self.fc_a(action)], dim=1))
         return phi
 
+class LinearLSTMBody(nn.Module):
+    #This is tentative and probably wrong; probably should be using lstm cells instead.
+    def __init__(self, state_dim, hidden_lin_units=200, gate=F.relu, hidden_lstm_units=128):
+        super(LinearLSTMBody, self).__init__()
+        self.linear_layer = layer_init(nn.Linear(state_dim, hidden_lin_units))
+        self.gate = gate
+        self.lstm = layer_init(nn.LSTM(hidden_lin_units, hidden_lstm_units, num_layers=1))
+        self.feature_dim = hidden_lstm_units
+
+    def forward(self, x):
+        phi = self.gate(self.lstm(self.gate(self.linear_layer(x))))
 
 class DummyBody(nn.Module):
     def __init__(self, state_dim):
