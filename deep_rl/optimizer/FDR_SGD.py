@@ -35,7 +35,7 @@ class FDR_quencher(Optimizer):
 
     # Setting up hyperparameters
     def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, weight_decay=0.001, t_adaptive=1000, X=0.01,
-                 Y=0.9, logger=None, tag=None, time_factor=1, baseline_avg_length=1000, dFDR_avg_length=1000):
+                 Y=0.9, logger=None, tag=None, time_factor=1, baseline_avg_length=1000, dFDR_avg_length=1000, sceptic_period = 0):
         defaults = dict(lr=lr_init, momentum=momentum, dampening=dampening, weight_decay=weight_decay,
                         t_adaptive=t_adaptive, X=X, Y=Y)
         super(FDR_quencher, self).__init__(params, defaults)
@@ -48,6 +48,7 @@ class FDR_quencher(Optimizer):
         self.Y = Y
         self.reset_stats()
         self.change_learner = False #signal
+        self.sceptic_period = sceptic_period
         #self.reduce_num = 1 #number of times to reduce lr before passing the ball
         #self.reduced_so_far = 0 # number of time lr was reduced
 
@@ -141,9 +142,9 @@ class FDR_quencher(Optimizer):
 
             # Record OL and OR
             OR = 0.5 * lr * ((1.0 + momentum) / (1.0 - dampening)) * v_squared
-            group['OLs'].append(OL.item())
+            #group['OLs'].append(OL.item())
             #group['OLs'].append(OL)
-            group['ORs'].append(OR.item())
+            #group['ORs'].append(OR.item())
             #group['ORs'].append(OR)
             group['t'] += 1
 
@@ -155,7 +156,8 @@ class FDR_quencher(Optimizer):
             group['dOLbar'].add(OL)
             group['dORbar'].add(OR)
 
-            dFDR = np.abs((group['dOLbar'].get() / group['dORbar'].get()) - 1.0)
+
+            dFDR = np.abs((group['dOLbar'].get() / (group['dORbar'].get())) - 1.0)
 
 
             logger = self.logger
@@ -205,10 +207,8 @@ class FDR_quencher(Optimizer):
 
                 # If close to equilibrium, decrease the learning rate
 
-            if dFDR < group['X']:
+            if dFDR < group['X'] and not self.change_learner and group['t']*self.time_factor > self.sceptic_period:
                     # Quench
-                group['lr'] *= (1.0 - self.Y)
-                logger.update_log_value("lr_" + self.tag, group['lr'])
                 self.change_learner = True
                 self.reset_stats()
 
@@ -222,9 +222,12 @@ class FDR_quencher(Optimizer):
             # Reset time
             group['t'] = 0
 
-    def reset_group_calculation_of_cFDR(self, group):
 
-        # Purge running record of observables
+    def reduce_lr(self, group):
+        group['lr'] *= (1.0 - self.Y)
+        self.logger.update_log_value("lr_" + self.tag, group['lr'])
+
+    def reset_group_calculation_of_cFDR(self, group): # Purge running record of observables
         group['OLs'] = list()
         group['ORs'] = list()
 

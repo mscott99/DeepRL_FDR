@@ -132,16 +132,20 @@ def check_alternate_by_cFDR(critic_updating, info):
 
 def check_alternate_partial_cFDR(critic_updating, info):
     """update actor and critic only upon convergence of the other"""
+    #if (info['total_steps'] - info['last_change'] > info['sceptic_period']):
     critic_optimizer = info['critic_optimizer']
     if critic_updating and critic_optimizer.change_learner:
-            critic_optimizer.change_learner = False
             critic_optimizer.reset_stats()
             return True
-    elif info['total_steps'] - info['last_change'] > info['n_actor']:
+    elif not critic_updating and info['total_steps'] - info['last_change'] > info['n_actor']:
         info['actor_optimizer'].reset_stats()
+        critic_optimizer.reset_stats()
+        critic_optimizer.change_learner = False
         return True
     else:
         return False
+    #else:
+    #    return False
 
 
 def check_alternate_stuck(reset_actor, reset_critic, critic_updating, info):
@@ -179,11 +183,13 @@ class Small_A2C_FDR(Model):
         config.actor_optimizer_fn = lambda params, logger=None: FDR_quencher(params, lr_init=config.actor_lr, momentum=config.actor_mom, dampening=config.actor_damp,
                                                                   weight_decay=0.001, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
                                                                   logger=logger, tag="actor",time_factor=config.rollout_length*config.num_workers,
-                                                                  baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length)
+                                                                  baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length,
+                                                                             sceptic_period=config.sceptic_period)
         config.critic_optimizer_fn = lambda params, logger=None: FDR_quencher(params, lr_init=config.critic_lr, momentum=config.critic_mom, dampening=config.critic_damp,
                                                                    weight_decay=0.003, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
                                                                    logger=logger, tag="critic", time_factor=config.rollout_length*config.num_workers,
-                                                                   baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length)
+                                                                   baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length,
+                                                                              sceptic_period=config.sceptic_period)
         config.discount = 0.98
         config.actor_hidden_units = (32,32)
         config.critic_hidden_units = (32,32)

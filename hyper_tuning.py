@@ -212,11 +212,11 @@ def tune_n_steps():
     randomised_tune_params(params_dist, const_params, leaderboard_size=7, num_tests=1000000,
                            values_in_tag=['n_actor', 'X', 'critic_lr', 'actor_lr'], follow_all_tuned=True)
 
-def run_single_cartpole():
+def run_single_cheetah():
     const_params = {'model_class': FDR_A2C_partial,
                     'track_critic_vals': False,
                     'game': 'HalfCheetah-v2',
-                    'max_steps': 1e5,
+                    'max_steps': 5e6,
                     'tag': 'debug',
                     'group_tag': 'debug',
                     'log_keywords': [('critic_loss', 0), ('actor_loss', 0), ('episodic_return_train', 0),
@@ -226,12 +226,13 @@ def run_single_cartpole():
                     'actor_hidden_units':(100,100),
                     'critic_hidden_units':(100,100),
                     'stop_at_victory': True,
-                    'critic_lr': 0.01,
-                    'actor_lr': 0.05,
+                    'critic_lr': 0.001,
+                    'actor_lr': 0.001,
                     'X': 0.3,
                     'Y': 0.9,
-                    'n_actor': 1e4,
-                    'baseline_avg_length': 1e5,
+                    'n_actor': 1e2,
+                    'baseline_avg_length': 1e4,
+                    'sceptic_period':1e3
     }
     run_single(const_params)
 
@@ -262,7 +263,7 @@ if __name__ == "__main__":
     start_generic_run()
     #run_half_cheetah()
     #tune_n_steps()
-    run_single_cartpole()
+    run_single_cheetah()
 
     #grid_tune_params(Small_A2C_FDR, grid_search_entropy, const_params, num_evals=10, leaderboard_size=10, tune_tag="acrobat_long_run", data_folder="acrobot_long/", values_in_tag=['max_steps'])
     #randomised_tune_params(estimator_fn, search_config, num_tests=20, train_length=int(100), test_length=int(5), leaderboard_size=3, tune_version=0)

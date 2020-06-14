@@ -68,7 +68,7 @@ class FDRA2CAgent(BaseAgent):
             prediction = self.network(config.state_normalizer(states))
             next_states, rewards, terminals, info = self.task.step(to_np(prediction['a']))
             episode_count += np.count_nonzero(terminals)
-            logger.update_log_value("action", float(to_np(prediction['a'])[0,0]))
+            #logger.update_log_value("action", float(to_np(prediction['a'])[0,0]))
             if config.game == "CartPole-v0" and config.stop_at_victory:
                 self.record_online_return(info, returns_vessel=self.last_100_returns)
             else:
