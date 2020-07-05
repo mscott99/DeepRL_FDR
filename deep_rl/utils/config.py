@@ -82,6 +82,25 @@ class Config:
         self.group_tag = "default_group"
         self.actor_body = None
         self.critic_body = None
+        self.R = None
+        self.R_critic = None
+        self.R_actor = None
+        self.X_low = None
+        self.X_high = None
+        self.min_baseline_length = 100.0
+        self.max_baseline_length = 1e6
+        self.min_FDR_length = 100.0
+        self.max_FDR_length = 1e6
+        self.run_avg_base = 1.2
+        self.low_count_threshold = 1.0
+        self.high_count_threshold = 1.0
+        self.gate = torch.tanh
+        self.logger =None
+        self.min_lr_actor = 1e-6
+        self.max_lr_actor = 1.0
+        self.min_lr_critic = 1e-6
+        self.max_lr_critic = 1.0
+        self.high_ratio = 0.5 #portion of running averages that must exceed the ratio for a change in lr
         #dont believe average before  sceptic_period has expired
     @property
     def eval_env(self):

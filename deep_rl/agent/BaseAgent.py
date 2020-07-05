@@ -16,6 +16,7 @@ class BaseAgent:
     def __init__(self, config):
         self.config = config
         self.logger = get_logger(tag=config.tag, log_level=config.log_level, save_folder=config.group_tag)
+        config.logger = self.logger
         self.task_ind = 0
 
     def close(self):
@@ -65,12 +66,15 @@ class BaseAgent:
         if isinstance(info, dict):
             ret = info['episodic_return']
             if ret is not None:
-                self.logger.update_log_value('episodic_return_train',ret)
+                #self.logger.update_log_value('episodic_return_train',ret)
                 if returns_vessel is not None:
                     returns_vessel.append(ret)
                 #self.logger.add_scalar('episodic_return_train', ret, self.total_steps + offset)
                 #self.logger.info('steps %d, episodic_return_train %s' % (self.total_steps + offset, ret))
         elif isinstance(info, tuple):
+            avg_ret = np.mean([elt['episodic_return'] for elt in info if elt['episodic_return'] is not None])
+            if not np.isnan(avg_ret):
+                self.logger.update_log_value('episodic_return_train', avg_ret)
             for i, info_ in enumerate(info):
                 self.record_online_return(info_, returns_vessel=returns_vessel, offset=i)
         else:

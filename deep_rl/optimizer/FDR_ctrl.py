@@ -9,11 +9,11 @@
 import numpy as np
 import torch
 from torch.optim.optimizer import Optimizer  # , required
-from deep_rl.utils.running_avg import RunningAvg, ArrayRunningAvg
+from deep_rl.utils.running_avg import RunningAvg, ArrayRunningAvg, MatrixRunningAvg
 from deep_rl.utils.torch_utils import to_np
 
 
-class FDR_quencher(Optimizer):
+class FDR_controller(Optimizer):
     '''
     Arguments:
         lr_init (float, optional, default=0.1): initial learning rate.
@@ -35,18 +35,25 @@ class FDR_quencher(Optimizer):
     '''
 
     # Setting up hyperparameters
-    def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, weight_decay=0.001, t_adaptive=1000, X=0.01,
-                 Y=0.9, logger=None, tag=None, time_factor=1, baseline_avg_length=1000, dFDR_avg_length=1000, sceptic_period = 0):
-        defaults = dict(lr=lr_init, momentum=momentum, dampening=dampening, weight_decay=weight_decay,
-                        t_adaptive=t_adaptive, X=X, Y=Y)
-        super(FDR_quencher, self).__init__(params, defaults)
+    def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, t_adaptive=1000, X_low=0.00, X_high=1e8,
+                 R=0.9, logger=None, tag=None, time_factor=1, sceptic_period = 0, min_baseline_length = 1.0,
+                 max_baseline_length=1e6, min_FDR_length = 1.0, max_FDR_length=1e6, run_avg_base=2.0,
+                 low_count_threshold = 1, high_count_threshold=1, high_ratio=0.5, **kwargs):
+        defaults = dict(lr=lr_init, momentum=momentum, dampening=dampening,
+                        t_adaptive=t_adaptive, X_low=X_low, X_high=X_high, R=R)
+        super(FDR_controller, self).__init__(params, defaults)
         self.logger = logger
         self.tag = tag
         self.lr_init = lr_init
         self.time_factor = time_factor
-        self.baseline_avg_length = baseline_avg_length
-        self.dFDR_avg_length = dFDR_avg_length
-        self.Y = Y
+        self.min_baseline_length = min_baseline_length
+        self.max_baseline_length = max_baseline_length
+        self.min_FDR_length = min_FDR_length
+        self.max_FDR_length = max_FDR_length
+        self.run_avg_base = run_avg_base
+        self.low_count_threshold = low_count_threshold
+        self.high_count_threshold = high_count_threshold
+        self.high_ratio = high_ratio
         self.reset_stats()
         self.change_learner = False #signal
         self.sceptic_period = sceptic_period
@@ -55,10 +62,11 @@ class FDR_quencher(Optimizer):
 
         for group in self.param_groups:
             group['lr'] = lr_init
+            logger.update_log_value('lr_' + self.tag, lr_init)
         #time_factor: num steps per update of FDR
 
     def __setstate__(self, state):
-        super(FDR_quencher, self).__setstate__(state)
+        super(FDR_controller, self).__setstate__(state)
 
     # One SGD iteration
     def step(self, closure=None):
@@ -73,7 +81,6 @@ class FDR_quencher(Optimizer):
             lr = group['lr']
             momentum = group['momentum']
             dampening = group['dampening']
-            weight_decay = group['weight_decay']
 
 
 
@@ -103,8 +110,6 @@ class FDR_quencher(Optimizer):
                     continue
                 theta = p.data
                 F = -p.grad.data
-                if weight_decay != 0:
-                    F.add_(-weight_decay, theta)
 
                 # Create velocity degrees of freedom
                 param_state = self.state[p]
@@ -116,20 +121,11 @@ class FDR_quencher(Optimizer):
                 # Create baseline
                 if 'baseline' not in param_state:
                     #baseline = param_state['baseline'] = torch.zeros_like(theta)
-                    baseline = param_state['baseline'] = ArrayRunningAvg(exp_base=2, low_bound=int(1000.0/self.time_factor), high_bound=int(1e6/self.time_factor), correct_begin=True,
+                    baseline = param_state['baseline'] = ArrayRunningAvg(exp_base=self.run_avg_base, low_bound=int(self.min_baseline_length/self.time_factor), high_bound=int(self.max_baseline_length/self.time_factor), correct_begin=True,
                                                                     init_value=torch.zeros_like(theta.view(-1)))
                 else:
                     baseline = param_state['baseline']
 
-                #Compute baseline
-                #baseline = (theta + t*baseline)/(t+1)
-                #n = 100
-                #baseline = (theta + (n-1)*baseline)/(n)
-
-                # Compute observables
-                #v_squared += torch.norm(v) ** 2
-                #Sho computes v_squared of the past iteration, which does not have the impact of the current iteration
-                #theta_base_norm_sqrd += torch.norm(theta.exp-baseline.get()) ** 2
                 F_norm_sqrd += torch.norm(F) ** 2
                 theta_tilde = theta.view(-1).unsqueeze(0) - baseline.get()
                 OL += -torch.tensordot(F.view(-1), theta_tilde,dims=[[0],[1]])
@@ -143,35 +139,30 @@ class FDR_quencher(Optimizer):
 
                 # Save current v update
                 param_state['velocity'] = v
-                #param_state['baseline'] = baseline
 
 
             # Record OL and OR
-            OR = 0.5 * lr * ((1.0 + momentum) / (1.0 - dampening)) * v_squared
-            #group['OLs'].append(OL.item())
-            #group['OLs'].append(OL)
-            #group['ORs'].append(OR.item())
-            #group['ORs'].append(OR)
+            OR = 0.5* lr * ((1.0 + momentum) / (1.0 - dampening)) * v_squared
+            # normalize both by learning rate
+            OL = OL/lr
+            OR = OR/lr
+
             group['t'] += 1
 
-            #m=100
-            #dOL = group['dOLbar']
-            #dOR = group['dORbar']
-            #dOL = (OL + (m-1)*dOL)/m
-            #dOR = (OR + (m-1)*dOR)/m
-            group['dOLbar'].add(indiv_values=OL) # we have individual values for OL because of the different baselines in OL
+            group['dOLbar'].add(first_dim_vals=OL) # we have individual values for OL because of the different baselines in OL
             group['dORbar'].add(value_for_all=OR)
 
-            dFDR = np.array([np.abs((Ol.get() / (Or.get())) - 1.0) for (Ol,Or) in zip(group['dOLbar'], group['dORbar'])])
+            dFDR = np.abs(to_np(group['dOLbar'].get()/group['dORbar'].get().unsqueeze(0) - 1))
+            #dFDR = np.array([np.abs((Ol.get() / (Or.get())) - 1.0) for (Ol,Or) in zip(group['dOLbar'], group['dORbar'])])
 
 
             logger = self.logger
             if logger is not None:
-                dFDR_vals = [('dFDR_' + str(i),elt) for (i, elt) in enumerate(dFDR)]
-                OL_vals = [('OL_' + str(i),elt) for (i, elt) in enumerate(OL)]
+                #dFDR_vals = [('dFDR_' + str(i),elt) for (i, elt) in enumerate(dFDR.shape[0])]
+                #OL_vals = [('OL_' + str(i),elt) for (i, elt) in range(OL.shape[0])]
 
-                vals = [("OR", OR), ("Base_Theta", np.sqrt(theta_base_norm_sqrd)),('F_norm', np.sqrt(F_norm_sqrd))]
-                vals = vals + dFDR_vals + OL_vals
+                vals = [("OR", OR), ("Base_Theta", np.sqrt(theta_base_norm_sqrd)),('F_norm', np.sqrt(F_norm_sqrd)), ('dFDR', dFDR[3,3].item())]
+                vals = vals #+ dFDR_vals + OL_vals
                 if self.tag is not None:
                     tag = self.tag
                     for val in vals:
@@ -180,65 +171,41 @@ class FDR_quencher(Optimizer):
                     for val in vals:
                         logger.update_log_value(val[0], val[1])
 
-            # FDR adaptive step
-            #if (t % t_adaptive) == 0:
+            #count the number of time each average was satisfied
+            small = (dFDR < group['X_low']).astype(int)
+            big = (dFDR > group['X_high']).astype(int)
+            self.low_counter = self.low_counter*small + small
+            self.high_counter = self.high_counter*big + big
 
-                # Fluctuation-dissipation observables
-            #    OLs = group['OLs']
-            #    ORs = group['ORs']
+            #if any avg is below threshold, good enough
+            if (self.low_counter >= self.low_count_threshold).any() and group['t']*self.time_factor > self.sceptic_period:
+                (self.low_counter >= self.low_count_threshold)
+                group['lr'] = group['lr']*group['R']
+                logger.update_log_value('lr_'+ self.tag, group['lr'])
+                group['t'] = 0
+                #self.reset_stats()
 
-                # Compute half-running time average
-            #    transient_cut = int(np.floor(0.5 * t))
-            #    OLbar = np.mean(OLs[transient_cut:t])
-            #    ORbar = np.mean(ORs[transient_cut:t])
-
-                # FDR adaptive scheduling hyperparameters
-            #    X = group['X']
-            #    Y = group['Y']
-
-                # Adapt if sufficiently close to equilibrium
-            #    cFDR = np.abs((OLbar / ORbar) - 1.0)
-
-                # track the cFDR variable
-            #    if logger is not None:
-            #        vals = [("cFDR",cFDR)]
-
-            #        if self.tag is not None:
-            #            tag = self.tag
-            #            for val in vals:
-            #                logger.update_log_value(val[0]+"_" + tag, val[1])
-            #       else:
-            #            for val in vals:
-            #                logger.update_log_value(val[0], val[1])
-                # In order to peek into what is going on behind the scene, please uncomment the following
-                # print('time=%d, cFDR=%.3f, lr=%.3f\n' % (group['t'], cFDR, group['lr']))
-
-                # If close to equilibrium, decrease the learning rate
-
-            if (dFDR < group['X']).any() and not self.change_learner and group['t']*self.time_factor > self.sceptic_period:
-                    # Quench
-                self.change_learner = True
+            #if majority of avg is above threshold, go up
+            elif np.sum(self.high_counter >= self.high_count_threshold) > self.high_counter.size*self.high_ratio and group['t'] * self.time_factor > self.sceptic_period:
+                group['lr'] = group['lr']/group['R']
+                logger.update_log_value('lr_'+ self.tag, group['lr'])
+                group['t'] = 0
+                #self.reset_stats()
 
     def reset_stats(self):
         for group in self.param_groups:
             # Purge running record of observables
             group['OLs'] = list()
             group['ORs'] = list()
-            group['dORbar'] = ArrayRunningAvg(exp_base=2, low_bound=int(1000/self.time_factor), high_bound=int(1e6/self.time_factor))
-            group['dOLbar'] = ArrayRunningAvg(exp_base=2, low_bound=int(1000/self.time_factor), high_bound=int(1e6/self.time_factor))
+            group['dORbar'] = ArrayRunningAvg(exp_base=self.run_avg_base, low_bound=int(self.min_FDR_length/self.time_factor), high_bound=int(self.max_FDR_length/self.time_factor))
+            group['dOLbar'] = MatrixRunningAvg(exp_base=self.run_avg_base, first_low_bound=int(self.min_baseline_length/self.time_factor) ,
+                              first_high_bound=int(self.max_baseline_length/self.time_factor) ,low_bound=int(self.min_FDR_length/self.time_factor), high_bound=int(self.max_FDR_length/self.time_factor))
+            self.low_counter = np.zeros_like(to_np(group['dOLbar'].get()))
+            self.high_counter = np.zeros_like(to_np(group['dOLbar'].get()))
             # Reset time
             group['t'] = 0
 
 
-    def reduce_lr(self, group):
-        group['lr'] *= (1.0 - self.Y)
-        self.logger.update_log_value("lr_" + self.tag, group['lr'])
 
-    def reset_group_calculation_of_cFDR(self, group): # Purge running record of observables
-        group['OLs'] = list()
-        group['ORs'] = list()
 
-        group['dORbar'] = RunningAvg(int(self.dFDR_avg_length / self.time_factor))  # to avoid division by zero
-        group['dOLbar'] = RunningAvg(int(self.dFDR_avg_length / self.time_factor))
-        # Reset time
-        group['t'] = 0
+

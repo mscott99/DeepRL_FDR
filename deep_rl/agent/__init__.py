@@ -8,3 +8,5 @@ from .PPO_agent import *
 from .OptionCritic_agent import *
 from .TD3_agent import *
 from .FDR_A2C_agent import *
+from .FDR_A2C_ctrl_agent import *
+from .FDR_A2C_actor_ctrl_agent import *
