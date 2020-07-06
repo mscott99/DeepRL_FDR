@@ -559,7 +559,7 @@ def tune_variable_RMS():
         'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
         'critic_lr': log_uniform_dist(1e-4, 1e-2, 10)
     }
-    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=5, leaderboard_size=3)
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=40, leaderboard_size=5)
 
 def tune_variable_FDR():
     const_params = {
@@ -592,7 +592,7 @@ def tune_variable_FDR():
         'R': finite_dist([0.95,0.975,0.98,0.985,0.99]),
     }
 
-    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=5, leaderboard_size=3)
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=40, leaderboard_size=5)
 
 if __name__ == "__main__":
     start_generic_run()
