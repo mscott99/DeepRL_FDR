@@ -36,7 +36,7 @@ class FDR_quencher(Optimizer):
 
     # Setting up hyperparameters
     def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, weight_decay=0.001, t_adaptive=1000, X=0.01,
-                 Y=0.9, logger=None, tag=None, time_factor=1, baseline_avg_length=1000, dFDR_avg_length=1000, sceptic_period = 0):
+                 Y=0.9, logger=None, tag=None, time_factor=1, baseline_avg_length=1000, dFDR_avg_length=1000, skeptic_period = 0):
         defaults = dict(lr=lr_init, momentum=momentum, dampening=dampening, weight_decay=weight_decay,
                         t_adaptive=t_adaptive, X=X, Y=Y)
         super(FDR_quencher, self).__init__(params, defaults)
@@ -49,7 +49,7 @@ class FDR_quencher(Optimizer):
         self.Y = Y
         self.reset_stats()
         self.change_learner = False #signal
-        self.sceptic_period = sceptic_period
+        self.skeptic_period = skeptic_period
         #self.reduce_num = 1 #number of times to reduce lr before passing the ball
         #self.reduced_so_far = 0 # number of time lr was reduced
 
@@ -215,7 +215,7 @@ class FDR_quencher(Optimizer):
 
                 # If close to equilibrium, decrease the learning rate
 
-            if (dFDR < group['X']).any() and not self.change_learner and group['t']*self.time_factor > self.sceptic_period:
+            if (dFDR < group['X']).any() and not self.change_learner and group['t']*self.time_factor > self.skeptic_period:
                     # Quench
                 self.change_learner = True
 

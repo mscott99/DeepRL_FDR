@@ -62,8 +62,10 @@ class DualRunningAvg:
 class ArrayRunningAvg:
     def __init__(self, exp_base=2, low_bound=1000, high_bound=1e6, **kwargs):
         start = math.ceil(math.log(low_bound, exp_base))
-        stop = math.floor(math.log(high_bound, exp_base))
-        self.avgs = [RunningAvg(exp_base**i, **kwargs) for i in range(start, stop)]
+        stop = math.ceil(math.log(high_bound, exp_base))
+        self.avgs = [RunningAvg(exp_base**i, **kwargs) for i in range(start, stop+1)]
+        if True:
+            pass
 
     def __iter__(self):
         return iter(self.avgs)
@@ -83,8 +85,11 @@ class ArrayRunningAvg:
 class MatrixRunningAvg:
     def __init__(self, exp_base=2, first_low_bound=1000, first_high_bound=1e6, **kwargs):
         start = math.ceil(math.log(first_low_bound, exp_base))
-        stop = math.floor(math.log(first_high_bound, exp_base))
-        self.avgs = [ArrayRunningAvg(exp_base=exp_base, **kwargs) for i in range(start, stop)]
+        stop = math.ceil(math.log(first_high_bound, exp_base))
+        self.avgs = [ArrayRunningAvg(exp_base=exp_base, **kwargs) for i in range(start, stop+1)]
+        #we include the end
+        if True:
+            pass
 
     def __iter__(self):
         return iter(self.avgs)

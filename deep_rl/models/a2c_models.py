@@ -100,7 +100,7 @@ def check_alternate_interval_by_num_steps(interval_length, critic_updating: bool
 def check_alternate_cFDR_critic_loss(critic_tolerance, critic_updating, info):
     """update actor and critic only upon convergence of the other"""
 
-    if(info['total_steps'] - info['last_change'] > info['sceptic_period']):
+    if(info['total_steps'] - info['last_change'] > info['skeptic_period']):
         if critic_updating:
             critic_optimizer = info['critic_optimizer']
             if critic_optimizer.change_learner:
@@ -134,7 +134,7 @@ def check_alternate_by_cFDR(critic_updating, info):
 
 def check_alternate_partial_cFDR(critic_updating, info):
     """update actor and critic only upon convergence of the other"""
-    #if (info['total_steps'] - info['last_change'] > info['sceptic_period']):
+    #if (info['total_steps'] - info['last_change'] > info['skeptic_period']):
     critic_optimizer = info['critic_optimizer']
     if critic_updating and critic_optimizer.change_learner:
             #critic_optimizer.reset_stats()
@@ -183,15 +183,15 @@ class Small_A2C_FDR(Model):
 
 
         config.actor_optimizer_fn = lambda params, logger=None: FDR_quencher(params, lr_init=config.actor_lr, momentum=config.actor_mom, dampening=config.actor_damp,
-                                                                  weight_decay=0.001, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
-                                                                  logger=logger, tag="actor",time_factor=config.rollout_length*config.num_workers,
-                                                                  baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length,
-                                                                             sceptic_period=config.sceptic_period)
+                                                                             weight_decay=0.001, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
+                                                                             logger=logger, tag="actor", time_factor=config.rollout_length*config.num_workers,
+                                                                             baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length,
+                                                                             skeptic_period=config.skeptic_period)
         config.critic_optimizer_fn = lambda params, logger=None: FDR_quencher(params, lr_init=config.critic_lr, momentum=config.critic_mom, dampening=config.critic_damp,
-                                                                   weight_decay=0.003, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
-                                                                   logger=logger, tag="critic", time_factor=config.rollout_length*config.num_workers,
-                                                                   baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length,
-                                                                              sceptic_period=config.sceptic_period)
+                                                                              weight_decay=0.003, t_adaptive=config.t_adaptive, X=config.X, Y=config.Y,
+                                                                              logger=logger, tag="critic", time_factor=config.rollout_length*config.num_workers,
+                                                                              baseline_avg_length = config.baseline_avg_length, dFDR_avg_length= config.dFDR_avg_length,
+                                                                              skeptic_period=config.skeptic_period)
         config.discount = 0.98
         config.actor_hidden_units = (32,32)
         config.critic_hidden_units = (32,32)
@@ -269,7 +269,7 @@ class FDR_A2C_ctrl(Small_A2C_FDR):
                                                                                X_low=0,
                                                                                X_high=1e10,
                                                                                time_factor=config.rollout_length * config.num_workers,
-                                                                               sceptic_period=config.sceptic_period,
+                                                                               skeptic_period=config.skeptic_period,
                                                                                min_baseline_length=config.min_baseline_length,
                                                                                max_baseline_length=config.max_baseline_length,
                                                                                min_FDR_length=config.min_baseline_length,
@@ -289,7 +289,7 @@ class FDR_A2C_ctrl(Small_A2C_FDR):
                                                                                 logger=logger,
                                                                                 tag="critic",
                                                                                 time_factor=config.rollout_length * config.num_workers,
-                                                                                sceptic_period=config.sceptic_period,
+                                                                                skeptic_period=config.skeptic_period,
                                                                                 min_baseline_length=config.min_baseline_length,
                                                                                 max_baseline_length=config.max_baseline_length,
                                                                                 min_FDR_length=config.min_FDR_length,
@@ -324,7 +324,7 @@ class FDR_A2C_ctrl_actor(Small_A2C_FDR):
                            'X_low':0,
                            'X_high':1e10,
                            'time_factor':config.rollout_length * config.num_workers,
-                           'sceptic_period':config.sceptic_period,
+                           'skeptic_period':config.skeptic_period,
                            'min_baseline_length':config.min_baseline_length,
                            'max_baseline_length':config.max_baseline_length,
                            'min_FDR_length':config.min_baseline_length,
@@ -347,7 +347,7 @@ class FDR_A2C_ctrl_actor(Small_A2C_FDR):
                             'R' : config.R,
                             'tag' : "critic",
                             'time_factor' : config.rollout_length * config.num_workers,
-                            'sceptic_period' : config.sceptic_period,
+                            'skeptic_period' : config.skeptic_period,
                             'min_baseline_length' : config.min_baseline_length,
                             'max_baseline_length' : config.max_baseline_length,
                             'min_FDR_length' : config.min_FDR_length,
@@ -376,7 +376,7 @@ class FDR_A2C_ctrl_both(Small_A2C_FDR):
                            'X_low':0,
                            'X_high':1e10,
                            'time_factor':config.rollout_length * config.num_workers,
-                           'sceptic_period':config.sceptic_period,
+                           'skeptic_period':config.skeptic_period,
                            'min_baseline_length':config.min_baseline_length,
                            'max_baseline_length':config.max_baseline_length,
                            'min_FDR_length':config.min_baseline_length,
@@ -400,7 +400,7 @@ class FDR_A2C_ctrl_both(Small_A2C_FDR):
                             'R' : config.R_critic,
                             'tag' : "critic",
                             'time_factor' : config.rollout_length * config.num_workers,
-                            'sceptic_period' : config.sceptic_period,
+                            'skeptic_period' : config.skeptic_period,
                             'min_baseline_length' : config.min_baseline_length,
                             'max_baseline_length' : config.max_baseline_length,
                             'min_FDR_length' : config.min_FDR_length,
@@ -437,7 +437,7 @@ class FDR_A2C_RMS_ctrl(Small_A2C_FDR):
                                                                                 logger=logger,
                                                                                 tag="critic",
                                                                                 time_factor=config.rollout_length * config.num_workers,
-                                                                                sceptic_period=config.sceptic_period,
+                                                                                skeptic_period=config.skeptic_period,
                                                                                 min_baseline_length=config.min_baseline_length,
                                                                                 max_baseline_length=config.max_baseline_length,
                                                                                 min_FDR_length=config.min_FDR_length,

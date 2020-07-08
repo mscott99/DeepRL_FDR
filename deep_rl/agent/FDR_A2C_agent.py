@@ -15,6 +15,7 @@ class FDRA2CAgent(BaseAgent):
     def __init__(self, config):
         BaseAgent.__init__(self, config)
         logger = self.logger
+        self.init_logger(config.log_keywords)
         self.task = config.task_fn()
         self.eval_task = config.eval_env
         self.network = config.network_fn()
@@ -23,7 +24,6 @@ class FDRA2CAgent(BaseAgent):
         self.total_steps = 0
         self.time_factor = (config.num_workers*config.rollout_length)
         self.states = self.task.reset()
-        self.init_logger(config.log_keywords)
         self.episode_count=0
 
         #specific to Cartpole, check for completion
@@ -128,7 +128,7 @@ class FDRA2CAgent(BaseAgent):
         if self.config.alternate:
             updating_critique = self.updating_critic
             alternate_info = {"total_steps": self.total_steps, "last_change": self.last_change,
-                              "num_workers": config.num_workers, "sceptic_period": config.sceptic_period,
+                              "num_workers": config.num_workers, "skeptic_period": config.skeptic_period,
                               "critic_optimizer": self.critic_optimizer, "actor_optimizer": self.actor_optimizer,
                               "n_actor": config.n_actor}
 

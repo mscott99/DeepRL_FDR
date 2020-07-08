@@ -36,7 +36,7 @@ class FDRCallback(Optimizer):
 
     # Setting up hyperparameters
     def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, low_callback = lambda:None, high_callback=lambda:None,
-                 X_low=0.00, X_high=1e8, R=0.9, logger=None, tag=None, time_factor=1, sceptic_period = 0, min_baseline_length = 1.0,
+                 X_low=0.00, X_high=1e8, R=0.9, logger=None, tag=None, time_factor=1, skeptic_period = 0, min_baseline_length = 1.0,
                  max_baseline_length=1e6, min_FDR_length = 1.0, max_FDR_length=1e6, run_avg_base=2.0,
                  low_count_threshold=1,high_count_threshold=1, high_ratio=0.5, **kwargs):
         defaults = dict(lr=lr_init, momentum=momentum, dampening=dampening, X_low=X_low, X_high=X_high, R=R)
@@ -57,7 +57,7 @@ class FDRCallback(Optimizer):
         self.high_ratio = high_ratio
         self.reset_stats()
         self.change_learner = False #signal
-        self.sceptic_period = sceptic_period
+        self.skeptic_period = skeptic_period
         #self.reduce_num = 1 #number of times to reduce lr before passing the ball
         #self.reduced_so_far = 0 # number of time lr was reduced
 
@@ -179,11 +179,11 @@ class FDRCallback(Optimizer):
             logger.update_log_value('max_low_count', np.max(self.low_counter))
             logger.update_log_value('max_high_count', np.max(self.high_counter))
             #if any avg is below threshold, good enough
-            if (self.low_counter >= self.low_count_threshold).any() and group['t']*self.time_factor > self.sceptic_period:
+            if (self.low_counter >= self.low_count_threshold).any() and group['t']*self.time_factor > self.skeptic_period:
                 self.low_callback()
                 group['t']=0
             #if majority of avg is above threshold, go up
-            elif np.sum(self.high_counter >= self.high_count_threshold) > self.high_counter.size*self.high_ratio and group['t'] * self.time_factor > self.sceptic_period:
+            elif np.sum(self.high_counter >= self.high_count_threshold) > self.high_counter.size*self.high_ratio and group['t'] * self.time_factor > self.skeptic_period:
                 self.high_callback()
                 group['t']=0
     def reset_stats(self):

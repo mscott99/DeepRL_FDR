@@ -15,6 +15,7 @@ class FDRA2CCtrlAgent(BaseAgent):
     def __init__(self, config):
         BaseAgent.__init__(self, config)
         logger = self.logger
+        self.init_logger(config.log_keywords)
         self.task = config.task_fn()
         self.eval_task = config.eval_env
         self.network = config.network_fn()
@@ -23,7 +24,6 @@ class FDRA2CCtrlAgent(BaseAgent):
         self.total_steps = 0
         self.time_factor = (config.num_workers*config.rollout_length)
         self.states = self.task.reset()
-        self.init_logger(config.log_keywords)
         self.episode_count=0
 
         #specific to Cartpole, check for completion

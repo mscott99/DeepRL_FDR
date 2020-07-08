@@ -40,6 +40,14 @@ class log_uniform_dist:
         result = np.power(self.base, elt)
         return result
 
+class post_process_dist:
+    def __init__(self, sampler, post_process):
+        self.sampler = sampler
+        self.post_process = post_process
+
+    def sample(self):
+        return self.post_process(self.sampler.sample())
+
 search_config = {
     'lr_actor':uniform_dist(1e-4, 1e-3),
      'lr_critic':uniform_dist(1e-4, 1e-3),
@@ -91,10 +99,10 @@ def sample_params(params_dist):
     return result
 
 
-def purge_model_logging(dir_name, file_name):
-    purge('data' + '/' + dir_name, file_name)
-    purge('tf_log' + '/' + dir_name, file_name)
-    purge('log', file_name)
+def purge_model_logging(dir_name, file_pattern):
+    purge('data' + '/' + dir_name, file_pattern)
+    purge('tf_log' + '/' + dir_name, file_pattern)
+    purge('log', file_pattern)
 
 
 def run_single(params, values_in_tag=[], model_index=None, save_all_params=False, num_evals=1000):
@@ -182,7 +190,7 @@ def randomised_tune_params(params_dist, const_params, num_tests , leaderboard_si
         #except:
         #    print("Failed trial by exception")
         #    print(Exception)
-        #    continue
+#            continue
         leaderboard.add(score, params,model)
 
 
@@ -207,7 +215,7 @@ def start_generic_run():
     mkdir('data')
     random_seed()
     set_one_thread()
-    random_seed(seed=2)
+    random_seed(seed=21)
     select_device(-1)
     #select_device(0)
 
@@ -259,7 +267,7 @@ def run_single_cheetah():
                     'Y': 0.9,
                     'n_actor': 2e5,
                     'baseline_avg_length': 3e4,
-                    'sceptic_period':1e3,
+                    'skeptic_period':1e3,
                     'entropy_weight':0.01,
                     'gradient_clip':50
     }
@@ -321,7 +329,7 @@ def run_ctrl_cheetah():
                     'X_low': 0.1,
                     'X_high': 1.0,
                     'R': 0.9,
-                    'sceptic_period': 1000,
+                    'skeptic_period': 1000,
                     'entropy_weight': 0.01,
                     'gradient_clip': 50,
                     'min_FDR_length':100,
@@ -366,7 +374,7 @@ def tune_ctrl_cheetah():
                     'min_baseline_length':100,
                     'min_FDR_length':100,
                     'max_FDR_length':5e5,
-                    'sceptic_period': 1000,
+                    'skeptic_period': 1000,
                     'entropy_weight': 0.01,
                     'run_avg_base': 1.3,
                     'gate': torch.relu,
@@ -381,7 +389,7 @@ def eval_champ():
          'entropy_weight': 0.01,
          'max_baseline_length': 500000.0,
          'critic_hidden_units': (400, 400, 400),
-         'sceptic_period': 1000,
+         'skeptic_period': 1000,
          'min_baseline_length': 100,
          'track_critic_vals': False,
          'max_steps': 1e6,
@@ -421,7 +429,7 @@ def run_variable_actor():
          'entropy_weight': 0.01,
          'max_baseline_length': 500000.0,
          'critic_hidden_units': (64,64,64),
-         'sceptic_period': 1e3,
+         'skeptic_period': 1e3,
          'min_baseline_length': 100,
          'track_critic_vals': False,
          'max_steps': 1e6,
@@ -463,7 +471,7 @@ def run_variable_both():
          'entropy_weight': 0.01,
          'max_baseline_length': 500000.0,
          'critic_hidden_units': (64,64,64),
-         'sceptic_period': 1e3,
+         'skeptic_period': 1e3,
          'min_baseline_length': 100,
          'track_critic_vals': False,
          'max_steps': 1e6,
@@ -506,7 +514,7 @@ def tune_variable_both():
         'entropy_weight': 0.01,
         'max_baseline_length': 500000.0,
         'critic_hidden_units': (200, 200, 200),
-        'sceptic_period': 1e3,
+        'skeptic_period': 1e3,
         'min_baseline_length': 100,
         'track_critic_vals': False,
         'max_steps': 5e5,
@@ -546,58 +554,107 @@ def tune_variable_RMS():
     const_params = {
         'model_class':FDR_A2C_RMS,
         'track_critic_vals':True,
+        'gradient_clip': 10,
         'stop_at_victory':True,
         'actor_hidden_units':(24,24),
         'critic_hidden_units':(24,24),
         'gate':torch.tanh,
-        'group_tag':'normalised_tune_rms',
+        'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
+                         ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
+                         ['max_low_count', 0], ['max_high_count', 0]],
+        'group_tag':'normalised_tune_rms_v9',
         'tag':'tune_rms_',
-        'max_steps': 3e5,
+        'max_steps': 2e5,
         'game': 'CartPole-v0',
     }
     params_dist={
         'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
         'critic_lr': log_uniform_dist(1e-4, 1e-2, 10)
     }
-    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=40, leaderboard_size=5)
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=35, leaderboard_size=5)
 
 def tune_variable_FDR():
     const_params = {
         'game':'CartPole-v0',
         'track_critic_vals':True,
         'stop_at_victory':True,
+        'gradient_clip': 10,
         'model_class': New_FDR_A2C_ctrl,
         'actor_hidden_units': (24, 24),
         'critic_hidden_units': (24, 24),
         'gate': torch.tanh,
-        'group_tag': 'normalised_tune_FDR',
+        'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
+                         ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
+                         ['max_low_count', 0], ['max_high_count', 0]],
+        'group_tag': 'normalised_tune_FDR_v9',
         'tag': 'tune_FDR_',
-        'max_steps': 3e5,
+        'max_steps': 2e5,
         'actor_mom': 0.9,
         'actor_damp':0.9,
         'X_low':0.1,
         'X_high':1.0,
-        'sceptic_period':1000,
+        'skeptic_period':1000,
         'min_baseline_length':100,
         'max_baseline_length':1e5,
         'min_FDR_length':100,
         'max_FDR_length':1e5,
         'low_count_threshold':10,
         'high_count_threshold':10,
-        'high_ratio':0.5,
     }
     params_dist = {
         'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
         'critic_lr': log_uniform_dist(1e-4, 1e-2, 10),
-        'R': finite_dist([0.95,0.975,0.98,0.985,0.99]),
+        'R': post_process_dist(log_uniform_dist(1e-2, 0.5, 10), lambda elt: 1-elt),
+        'high_ratio':uniform_dist(low=0.2, high=0.5)
     }
 
-    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=40, leaderboard_size=5)
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=35, leaderboard_size=5)
+
+def tune_deacreasing_FDR():
+    const_params = {
+        'game': 'CartPole-v0',
+        'track_critic_vals': True,
+        'stop_at_victory': True,
+        'gradient_clip': 10,
+        'model_class': New_FDR_A2C_ctrl,
+        'actor_hidden_units': (24, 24),
+        'critic_hidden_units': (24, 24),
+        'gate': torch.tanh,
+        'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
+                         ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
+                         ['max_low_count', 0], ['max_high_count', 0]],
+        'group_tag': 'normalised_tune_decreasing_FDR_v0',
+        'tag': 'tune_',
+        'max_steps': 2e5,
+        'actor_mom': 0.9,
+        'actor_damp': 0.9,
+        'X_low': 0.1,
+        'X_high': 1.0,
+        'skeptic_period': 1000,
+        'low_count_threshold': 1,
+        'high_count_threshold': 1e7, #remove any possibility of increasing the critic lr
+        'R':0.5 #decrease by half
+    }
+    params_dist = {
+        ('min_baseline_length', 'max_baseline_length', 'min_FDR_length','max_FDR_length'): post_process_dist(log_uniform_dist(low=100, high=2e5, base=10), lambda elt:int(elt)),
+        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'critic_lr': log_uniform_dist(1e-4, 1, 10),
+        #'R': post_process_dist(log_uniform_dist(1e-2, 0.999999999, 10), lambda elt: 1 - elt),
+
+    }
+
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=35, leaderboard_size=5)
+
+
+
+def normalised_tune_FDR_rms():
+    tune_variable_FDR()
+    tune_variable_RMS()
 
 if __name__ == "__main__":
     start_generic_run()
-    tune_variable_RMS()
-    tune_variable_FDR()
+    tune_deacreasing_FDR()
+    #normalised_tune_FDR_rms()
     #run_half_cheetah()
     #tune_n_steps()
     #run_single_cheetah()

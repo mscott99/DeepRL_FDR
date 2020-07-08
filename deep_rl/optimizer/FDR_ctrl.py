@@ -36,7 +36,7 @@ class FDR_controller(Optimizer):
 
     # Setting up hyperparameters
     def __init__(self, params, lr_init=0.1, momentum=0.0, dampening=0, t_adaptive=1000, X_low=0.00, X_high=1e8,
-                 R=0.9, logger=None, tag=None, time_factor=1, sceptic_period = 0, min_baseline_length = 1.0,
+                 R=0.9, logger=None, tag=None, time_factor=1, skeptic_period = 0, min_baseline_length = 1.0,
                  max_baseline_length=1e6, min_FDR_length = 1.0, max_FDR_length=1e6, run_avg_base=2.0,
                  low_count_threshold = 1, high_count_threshold=1, high_ratio=0.5, **kwargs):
         defaults = dict(lr=lr_init, momentum=momentum, dampening=dampening,
@@ -56,7 +56,7 @@ class FDR_controller(Optimizer):
         self.high_ratio = high_ratio
         self.reset_stats()
         self.change_learner = False #signal
-        self.sceptic_period = sceptic_period
+        self.skeptic_period = skeptic_period
         #self.reduce_num = 1 #number of times to reduce lr before passing the ball
         #self.reduced_so_far = 0 # number of time lr was reduced
 
@@ -161,7 +161,7 @@ class FDR_controller(Optimizer):
                 #dFDR_vals = [('dFDR_' + str(i),elt) for (i, elt) in enumerate(dFDR.shape[0])]
                 #OL_vals = [('OL_' + str(i),elt) for (i, elt) in range(OL.shape[0])]
 
-                vals = [("OR", OR), ("Base_Theta", np.sqrt(theta_base_norm_sqrd)),('F_norm', np.sqrt(F_norm_sqrd)), ('dFDR', dFDR[3,3].item())]
+                vals = [("OR", OR), ("Base_Theta", np.sqrt(theta_base_norm_sqrd)),('F_norm', np.sqrt(F_norm_sqrd)), ('dFDR', dFDR[0,0].item())]
                 vals = vals #+ dFDR_vals + OL_vals
                 if self.tag is not None:
                     tag = self.tag
@@ -178,7 +178,7 @@ class FDR_controller(Optimizer):
             self.high_counter = self.high_counter*big + big
 
             #if any avg is below threshold, good enough
-            if (self.low_counter >= self.low_count_threshold).any() and group['t']*self.time_factor > self.sceptic_period:
+            if (self.low_counter >= self.low_count_threshold).any() and group['t']*self.time_factor > self.skeptic_period:
                 (self.low_counter >= self.low_count_threshold)
                 group['lr'] = group['lr']*group['R']
                 logger.update_log_value('lr_'+ self.tag, group['lr'])
@@ -186,7 +186,7 @@ class FDR_controller(Optimizer):
                 #self.reset_stats()
 
             #if majority of avg is above threshold, go up
-            elif np.sum(self.high_counter >= self.high_count_threshold) > self.high_counter.size*self.high_ratio and group['t'] * self.time_factor > self.sceptic_period:
+            elif np.sum(self.high_counter >= self.high_count_threshold) > self.high_counter.size*self.high_ratio and group['t'] * self.time_factor > self.skeptic_period:
                 group['lr'] = group['lr']/group['R']
                 logger.update_log_value('lr_'+ self.tag, group['lr'])
                 group['t'] = 0

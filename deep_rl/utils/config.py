@@ -76,7 +76,7 @@ class Config:
         self.dFDR_avg_length = 1000.0
         self.critic_loss_tolerance = 3.0
         self.track_critic_vals=False
-        self.sceptic_period = 0 #minimal period for average to run before taking averages into account
+        self.skeptic_period = 0 #minimal period for average to run before taking averages into account
         self.n_actor = 0
         self.stop_at_victory=False
         self.group_tag = "default_group"
@@ -101,7 +101,7 @@ class Config:
         self.min_lr_critic = 1e-6
         self.max_lr_critic = 1.0
         self.high_ratio = 0.5 #portion of running averages that must exceed the ratio for a change in lr
-        #dont believe average before  sceptic_period has expired
+        #dont believe average before  skeptic_period has expired
     @property
     def eval_env(self):
         return self.__eval_env
