@@ -63,6 +63,8 @@ class FDR_controller(Optimizer):
         for group in self.param_groups:
             group['lr'] = lr_init
             logger.update_log_value('lr_' + self.tag, lr_init)
+            group['X_low']= X_low
+            group['X_high'] = X_high
         #time_factor: num steps per update of FDR
 
     def __setstate__(self, state):

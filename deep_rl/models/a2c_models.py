@@ -2,7 +2,7 @@ from gym.spaces import Discrete, Box
 
 from deep_rl import *
 from deep_rl import run_steps
-from deep_rl.optimizer import FDR_quencher, FDR_controller, ActorCtrlFDROptimizer, BothCtrlFDROptimizer, SimpleSGD
+from deep_rl.optimizer import FDR_quencher, FDR_controller, ActorCtrlFDROptimizer, BothCtrlFDROptimizer, SimpleSGD, SimpleSGDLinearDecay
 from math import sqrt
 
 
@@ -305,10 +305,27 @@ class New_FDR_A2C_ctrl(FDR_A2C_ctrl):
         super().__init__(**kwargs)
         config = self.config
         config.actor_optimizer_fn = lambda params, logger=None: SimpleSGD(params,
+                                                                                     lr_init=config.actor_lr,
+                                                                                     momentum=config.actor_mom,
+                                                                                     dampening=config.actor_damp,
+                                                                                     logger=logger, tag='actor')
+
+class SGD_Lin_Decay(FDR_A2C_ctrl):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        config = self.config
+        config.actor_optimizer_fn = lambda params, logger=None: SimpleSGD(params,
                                                                           lr_init=config.actor_lr,
                                                                           momentum=config.actor_mom,
                                                                           dampening=config.actor_damp,
                                                                           logger=logger, tag='actor')
+        config.critic_optimizer_fn = lambda params,logger=None:  SimpleSGDLinearDecay(params,
+                                                                          lr_init=config.critic_lr,
+                                                                          a = config.lin_decay_a,
+                                                                          time_scale= config.num_workers*config.rollout_length,
+                                                                          momentum = config.critic_mom,
+                                                                          dampening = config.critic_damp,
+                                                                          logger=logger, tag='critic')
 
 
 class FDR_A2C_ctrl_actor(Small_A2C_FDR):

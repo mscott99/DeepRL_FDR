@@ -117,8 +117,8 @@ def run_single(params, values_in_tag=[], model_index=None, save_all_params=False
     save_folder = 'data/' + params['group_tag']+'/'
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
-    score, model = estimate_by_completion(params)
-    #score, model = estimator_fn(params, num_evals)
+    #score, model = estimate_by_completion(params)
+    score, model = estimator_fn(params, num_evals)
     model.agent.save(save_folder + params['tag'])
 
     if save_all_params:
@@ -145,7 +145,7 @@ class Leaderboard:
         if score >= leaderboard[size-1][1]:
             model_to_delete = leaderboard[size-1]
             if model_to_delete[2] is not None:
-                purge_model_logging(params['group_tag'], "model_" + str(model_to_delete[2]['model_index']))
+                purge_model_logging(params['group_tag'], "model_" + str(model_to_delete[2]['model_index']) + '-')
             leaderboard[size-1] = (model.config.tag, score, params)
             leaderboard = sorted(leaderboard, key=lambda obj: obj[1], reverse=True)
             self.board = leaderboard
@@ -153,7 +153,7 @@ class Leaderboard:
             with open(self.save_folder + self.params_file_name, 'w+') as file:
                 json.dump(leaderboard, file, default=lambda o:o.__name__)
         else:
-            purge_model_logging(params['group_tag'], "model_" + str(params['model_index']))
+            purge_model_logging(params['group_tag'], "model_" + str(params['model_index']) + '-')
 
 
 def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
@@ -382,6 +382,8 @@ def tune_ctrl_cheetah():
               }
     randomised_tune_params(params_dist, params, 10000, leaderboard_size=7,follow_all_tuned=False, values_in_tag=['actor_lr', 'critic_lr', 'X_low','high_ratio', 'R', 'gradient_clip', 'min_baseline_length','low_count_threshold', 'high_count_threshold'], num_evals=100)
 
+
+
 def eval_champ():
     const_params = {
          'critic_lr': 0.0005,
@@ -550,6 +552,45 @@ def tune_variable_both():
     randomised_tune_params(params_dist,const_params=const_params,num_tests=1000, leaderboard_size=7,num_evals=32)
 
 
+def eval_champ_rms():
+    const_params = {
+        'critic_lr': 0.0005,
+        'gradient_clip': 10,
+        'entropy_weight': 0.01,
+        'max_baseline_length': 500000.0,
+        'critic_hidden_units': (400, 400, 400),
+        'skeptic_period': 1000,
+        'min_baseline_length': 100,
+        'track_critic_vals': False,
+        'max_steps': 1e6,
+        'X_low': 0.05,
+        'tag': 'champ_ctrl_',
+        'R': 0.97,
+        'low_count_threshold': 10,
+        'run_avg_base': 1.3,
+        'min_FDR_length': 100,
+        'model_class': FDR_A2C_ctrl,
+        'high_count_threshold': 10,
+        'gate': torch.relu,
+        'max_FDR_length': 500000.0,
+        'actor_hidden_units': (400, 400, 400),
+        'num_workers': 16,
+        'actor_mom': 0.9,
+        'high_ratio': 0.2,
+        'actor_damp': 0.9,
+        'X_high': 1.5,
+        'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
+                         ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0]],
+        'group_tag': 'test_ctrl_champ_v1',
+        'actor_lr': 0.006,
+        'game': 'HalfCheetah-v2',
+    }
+    num_tests = 50
+    params_list = [{} for i in range(num_tests)]
+    listed_tune_params(params_list, const_params, 1, leaderboard_size=num_tests, values_in_tag=[],
+                       follow_all_tuned=False)
+
+
 def tune_variable_RMS():
     const_params = {
         'model_class':FDR_A2C_RMS,
@@ -572,6 +613,140 @@ def tune_variable_RMS():
         'critic_lr': log_uniform_dist(1e-4, 1e-2, 10)
     }
     randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=35, leaderboard_size=5)
+
+def tune_SGD_Cheetah_Lin_Decrease():
+    const_params = {
+        'game':'HalfCheetah-v2',
+        'track_critic_vals':False,
+        'stop_at_victory':False,
+        'gradient_clip': 10,
+        'model_class': SGD_Lin_Decay,
+        'actor_hidden_units': (100,100),
+        'critic_hidden_units': (100,100),
+        'gate': torch.relu,
+        'log_keywords': [['episodic_return_train', 0],
+                        ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],],
+        'group_tag': 'normalised_cheetah_SGD_Lin_decrease_champ_v1',
+        'tag': 'Lin_SGD_',
+        'max_steps': 1e6,
+        'actor_mom': 0.9,
+        'actor_damp':0.9,
+        'critic_lr': 0.0938536,
+        'actor_lr': 0.00307241878,
+        'lin_decay_a': 1118.89405
+    }
+    params_dist = {
+        'critic_lr': log_uniform_dist(1e-3, 1, 10),
+        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'lin_decay_a': log_uniform_dist(1, 1e4, 10),
+    }
+
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=50)
+
+def tune_FDR_Cheetah_Decrease():
+    const_params = {
+        'game':'HalfCheetah-v2',
+        'track_critic_vals':False,
+        'stop_at_victory':False,
+        'gradient_clip': 10,
+        'model_class': New_FDR_A2C_ctrl,
+        'actor_hidden_units': (100,100),
+        'critic_hidden_units': (100,100),
+        'gate': torch.relu,
+        'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
+                         ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
+                         ['max_low_count', 0], ['max_high_count', 0]],
+        'group_tag': 'normalised_cheetah_FDR_decrease_champ_v0',
+        'tag': 'FDR_',
+        'max_steps': 1e6,
+        'actor_mom': 0.9,
+        'actor_damp':0.9,
+        'skeptic_period':1000,
+        'min_baseline_length':100,
+        'max_baseline_length':1e6,
+        'min_FDR_length':100,
+        'max_FDR_length':1e6,
+        'run_avg_base':1.7,
+        'low_count_threshold':10,
+        'high_count_threshold':1e7,
+        'critic_lr': 0.1,
+        'X_high': 1,
+        'actor_lr':0.0027855,
+        'R':0.991449,
+        'X_low':0.066644,
+    }
+    params_dist = {
+        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'R': post_process_dist(log_uniform_dist(1e-3, 0.5, 10), lambda elt: 1-elt),
+        'X_low': log_uniform_dist(1e-2, 0.5, 10)
+    }
+
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=50)
+
+def tune_FDR_Cheetah():
+    const_params = {
+        'game':'HalfCheetah-v2',
+        'track_critic_vals':False,
+        'stop_at_victory':False,
+        'gradient_clip': 10,
+        'model_class': New_FDR_A2C_ctrl,
+        'actor_hidden_units': (100,100),
+        'critic_hidden_units': (100,100),
+        'gate': torch.relu,
+        'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
+                         ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
+                         ['max_low_count', 0], ['max_high_count', 0]],
+        'group_tag': 'normalised_cheetah_FDR_champ_v0',
+        'tag': 'FDR_',
+        'max_steps': 1e6,
+        'actor_mom': 0.9,
+        'actor_damp':0.9,
+        'X_low':0.1,
+        'X_high':1.0,
+        'skeptic_period':1000,
+        'min_baseline_length':100,
+        'max_baseline_length':1e6,
+        'min_FDR_length':100,
+        'max_FDR_length':1e6,
+        'low_count_threshold':10,
+        'high_count_threshold':10,
+        'high_ratio':0.5,
+        'actor_lr':0.00619193107,
+        'critic_lr':0.004502,
+        'R': 0.975345
+    }
+    params_dist = {
+        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'critic_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'R': post_process_dist(log_uniform_dist(1e-2, 0.5, 10), lambda elt: 1-elt),
+    }
+
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=5)
+
+def tune_RMS_cheetah():
+    const_params = {
+        'model_class':FDR_A2C_RMS,
+        'track_critic_vals':True,
+        'gradient_clip': 10,
+        'stop_at_victory':True,
+        'actor_hidden_units':(100, 100),
+        'critic_hidden_units':(100, 100),
+        'gate':torch.relu,
+        'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
+                         ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
+                         ['max_low_count', 0], ['max_high_count', 0]],
+        'group_tag':'normalised_cheetah_RMS_champ_v1',
+        'tag':'RMS_',
+        'max_steps': 1e6,
+        'game': 'HalfCheetah-v2',
+        'actor_lr': 0.0005913,
+        'critic_lr': 0.00060702
+    }
+    params_dist={
+        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'critic_lr': log_uniform_dist(1e-4, 1e-2, 10),
+    }
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=5)
 
 def tune_variable_FDR():
     const_params = {
@@ -610,7 +785,44 @@ def tune_variable_FDR():
 
     randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=35, leaderboard_size=5)
 
-def tune_deacreasing_FDR():
+def tune_decreasing_cheetah_SGD():
+    const_params = {
+        'game': 'HalfCheetah-v2',
+        'track_critic_vals': False,
+        'stop_at_victory': False,
+        'gradient_clip': 10,
+        'model_class': New_FDR_A2C_ctrl,
+        'actor_hidden_units': (100, 100),
+        'critic_hidden_units': (100, 100),
+        'gate': torch.tanh,
+        'log_keywords': [['episodic_return_train', 0],
+                        ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],],
+        'group_tag': 'normalised_cheetah_SGD_exp_champ_v0',
+        'tag': 'tune_',
+        'max_steps':  1e6,
+        'actor_mom': 0.9,
+        'actor_damp': 0.9,
+        'min_baseline_length': 1e3,
+        'max_baseline_length': 1e3,
+        'max_FDR_length':1e3,
+        'min_FDR_length':1e3,
+        'skeptic_period': 1000,
+        'low_count_threshold': 0,
+        'high_count_threshold': 1e7, #remove any possibility of increasing the critic lr
+        'actor_lr':0.003344987,
+        'critic_lr': 0.074019,
+        'R':0.989828725
+    }
+    params_dist = {
+        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'critic_lr': log_uniform_dist(5e-4, 1, 10),
+        'R': post_process_dist(log_uniform_dist(1e-4, 5e-2, 10), lambda elt: 1 - elt),
+    }
+
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=50)
+
+
+def tune_decreasing_SGD():
     const_params = {
         'game': 'CartPole-v0',
         'track_critic_vals': True,
@@ -623,29 +835,29 @@ def tune_deacreasing_FDR():
         'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
                          ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
                          ['max_low_count', 0], ['max_high_count', 0]],
-        'group_tag': 'normalised_tune_decreasing_FDR_v0',
+        'group_tag': 'normalised_tune_decreasing_SGD_v3',
         'tag': 'tune_',
         'max_steps': 2e5,
         'actor_mom': 0.9,
         'actor_damp': 0.9,
         'X_low': 0.1,
-        'X_high': 1.0,
+        'X_high': 1,
         'skeptic_period': 1000,
-        'low_count_threshold': 1,
+        'low_count_threshold': 0, #let FDR be always satisfied
         'high_count_threshold': 1e7, #remove any possibility of increasing the critic lr
-        'R':0.5 #decrease by half
+        'min_baseline_length': 100,
+        'max_baseline_length':100,
+        'min_FDR_length':100,
+        'max_FDR_length':100
     }
     params_dist = {
-        ('min_baseline_length', 'max_baseline_length', 'min_FDR_length','max_FDR_length'): post_process_dist(log_uniform_dist(low=100, high=2e5, base=10), lambda elt:int(elt)),
+        #('min_baseline_length', 'max_baseline_length', 'min_FDR_length','max_FDR_length'): post_process_dist(log_uniform_dist(low=100, high=2e5, base=10), lambda elt:int(elt)),
         'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
         'critic_lr': log_uniform_dist(1e-4, 1, 10),
-        #'R': post_process_dist(log_uniform_dist(1e-2, 0.999999999, 10), lambda elt: 1 - elt),
-
+        'R': post_process_dist(log_uniform_dist(1e-3, 0.999999999, 10), lambda elt: 1 - elt),
     }
 
-    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=35, leaderboard_size=5)
-
-
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=100, leaderboard_size=5)
 
 def normalised_tune_FDR_rms():
     tune_variable_FDR()
@@ -653,7 +865,12 @@ def normalised_tune_FDR_rms():
 
 if __name__ == "__main__":
     start_generic_run()
-    tune_deacreasing_FDR()
+    tune_decreasing_cheetah_SGD()
+    #tune_SGD_Cheetah_Lin_Decrease()
+    #tune_FDR_Cheetah_Decrease()
+    #tune_RMS_cheetah()
+    #tune_FDR_Cheetah()
+    #tune_variable_FDR()
     #normalised_tune_FDR_rms()
     #run_half_cheetah()
     #tune_n_steps()

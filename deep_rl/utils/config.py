@@ -82,11 +82,11 @@ class Config:
         self.group_tag = "default_group"
         self.actor_body = None
         self.critic_body = None
-        self.R = None
-        self.R_critic = None
-        self.R_actor = None
-        self.X_low = None
-        self.X_high = None
+        self.R = 0.97
+        self.R_critic = 0.97
+        self.R_actor = 0.97
+        self.X_low = 0.1
+        self.X_high = 1.0
         self.min_baseline_length = 100.0
         self.max_baseline_length = 1e6
         self.min_FDR_length = 100.0
@@ -100,6 +100,7 @@ class Config:
         self.max_lr_actor = 1.0
         self.min_lr_critic = 1e-6
         self.max_lr_critic = 1.0
+        self.lin_decay_a = 1 #inversely proportionnal learning rate decay
         self.high_ratio = 0.5 #portion of running averages that must exceed the ratio for a change in lr
         #dont believe average before  skeptic_period has expired
     @property
