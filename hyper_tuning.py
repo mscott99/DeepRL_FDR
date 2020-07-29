@@ -748,6 +748,27 @@ def tune_RMS_cheetah():
     }
     randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=5)
 
+def tune_Adam_cheetah():
+    const_params = {
+        'model_class':FDR_A2C_ADAM,
+        'track_critic_vals':True,
+        'gradient_clip': 10,
+        'stop_at_victory':True,
+        'actor_hidden_units':(100, 100),
+        'critic_hidden_units':(100, 100),
+        'gate':torch.relu,
+        'log_keywords': [['episodic_return_train', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],],
+        'group_tag':'normalised_cheetah_ADAM_champ_v0',
+        'tag':'ADAM_',
+        'max_steps': 1e6,
+        'game': 'HalfCheetah-v2',
+    }
+    params_dist={
+        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'critic_lr': log_uniform_dist(1e-4, 1e-2, 10),
+    }
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=35, leaderboard_size=7, num_evals=35)
+
 def tune_variable_FDR():
     const_params = {
         'game':'CartPole-v0',
@@ -865,7 +886,8 @@ def normalised_tune_FDR_rms():
 
 if __name__ == "__main__":
     start_generic_run()
-    tune_decreasing_cheetah_SGD()
+    tune_Adam_cheetah()
+    #tune_decreasing_cheetah_SGD()
     #tune_SGD_Cheetah_Lin_Decrease()
     #tune_FDR_Cheetah_Decrease()
     #tune_RMS_cheetah()

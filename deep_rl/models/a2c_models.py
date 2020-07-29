@@ -233,6 +233,17 @@ class FDR_A2C_RMS(Small_A2C_FDR):
         config.merge(kwargs)
 
 
+class FDR_A2C_ADAM(Small_A2C_FDR):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        config= self.config
+        config.alternate=False
+        config.actor_body = FCBody(config.state_dim, hidden_units=config.actor_hidden_units, gate=config.gate)
+        config.critic_body = FCBody(config.state_dim, hidden_units=config.critic_hidden_units, gate=config.gate)
+        config.actor_optimizer_fn = lambda params, logger: torch.optim.Adam(params, config.actor_lr)
+        config.critic_optimizer_fn= lambda params, logger: torch.optim.Adam(params, config.critic_lr)
+        config.merge(kwargs)
+
 class FDR_A2C_partial(Small_A2C_FDR):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
