@@ -108,3 +108,4 @@ test_display_gym.py
 data/
 tf_log/
 log/
+current_container

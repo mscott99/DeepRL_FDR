@@ -758,7 +758,7 @@ def tune_Adam_cheetah():
         'critic_hidden_units':(100, 100),
         'gate':torch.relu,
         'log_keywords': [['episodic_return_train', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],],
-        'group_tag':'normalised_cheetah_ADAM_champ_v0',
+        'group_tag':'normalised_cheetah_ADAM_champ_v1',
         'tag':'ADAM_',
         'max_steps': 1e6,
         'game': 'HalfCheetah-v2',
