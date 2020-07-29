@@ -683,22 +683,22 @@ def tune_FDR_Cheetah_Decrease():
 
     randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=50)
 
-def tune_FDR_Cheetah():
+def tune_FDR_Humanoid():
     const_params = {
-        'game':'HalfCheetah-v2',
+        'game':'Humanoid-v2',
         'track_critic_vals':False,
         'stop_at_victory':False,
         'gradient_clip': 10,
         'model_class': New_FDR_A2C_ctrl,
-        'actor_hidden_units': (100,100),
-        'critic_hidden_units': (100,100),
+        'actor_hidden_units': (300,300,300,300),
+        'critic_hidden_units': (300,300,300,300),
         'gate': torch.relu,
         'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
                          ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
                          ['max_low_count', 0], ['max_high_count', 0]],
-        'group_tag': 'normalised_cheetah_FDR_champ_v0',
+        'group_tag': 'normalised_humanoid_champ_FDR_v0',
         'tag': 'FDR_',
-        'max_steps': 1e6,
+        'max_steps': 1e7,
         'actor_mom': 0.9,
         'actor_damp':0.9,
         'X_low':0.1,
@@ -721,7 +721,7 @@ def tune_FDR_Cheetah():
         'R': post_process_dist(log_uniform_dist(1e-2, 0.5, 10), lambda elt: 1-elt),
     }
 
-    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=5)
+    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=1, leaderboard_size=1, num_evals=50)
 
 def tune_RMS_cheetah():
     const_params = {
@@ -886,7 +886,8 @@ def normalised_tune_FDR_rms():
 
 if __name__ == "__main__":
     start_generic_run()
-    tune_Adam_cheetah()
+    tune_FDR_Humanoid()
+    #tune_Adam_cheetah()
     #tune_decreasing_cheetah_SGD()
     #tune_SGD_Cheetah_Lin_Decrease()
     #tune_FDR_Cheetah_Decrease()
