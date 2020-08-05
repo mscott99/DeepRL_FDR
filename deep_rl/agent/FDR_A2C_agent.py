@@ -174,6 +174,8 @@ class FDRA2CAgent(BaseAgent):
             self.actor_optimizer.zero_grad()
             (policy_loss - config.entropy_weight * entropy_loss +
             config.value_loss_weight * value_loss).backward()
+            if config.gradient_clip is not None:
+                nn.utils.clip_grad_norm_(self.network.parameters(), config.gradient_clip)
             self.actor_optimizer.step()
             self.critic_optimizer.step()
 

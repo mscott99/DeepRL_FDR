@@ -197,8 +197,8 @@ class Small_A2C_FDR(Model):
         config.critic_hidden_units = (32,32)
         config.use_gae = False
         config.entropy_weight = 0.01
-        config.alternate = True
-        config.check_for_alternation_callback = check_alternate_by_cFDR
+        config.alternate = False
+        #config.check_for_alternation_callback = check_alternate_by_cFDR
         #config.check_for_alternation = lambda *params: check_alternate_by_cFDR(0.2, 0.2, *params)
         config.rollout_length = 5
         #config.gradient_clip = 0.5
@@ -206,8 +206,8 @@ class Small_A2C_FDR(Model):
         #config.log_interval = 1e4
         config.max_steps = 2e5
         #config.log_keywords = [("action",0),("critic_loss",0),("actor_loss",0) ,("dFDR_critic",100),("cFDR_critic",100), ("dFDR_actor", 100), ("cFDR_actor", 100), ("OL_critic",100),("OR_critic",1),("Base_Theta_critic",0),("OL_actor",100),("OR_actor",1),("Base_Theta_actor",0)]
-        config.log_keywords = [("action",0),("critic_loss",0),("actor_loss",0) ,("dFDR_critic",100), ("dFDR_actor", 100), ("OL_critic",100),("OR_critic",1),("OL_actor",100),("OR_actor",1)]
-        config.tag = "mountain_car_debug"
+        #config.log_keywords = [("action",0),("critic_loss",0),("actor_loss",0) ,("dFDR_critic",100), ("dFDR_actor", 100), ("OL_critic",100),("OR_critic",1),("OL_actor",100),("OR_actor",1)]
+        #config.tag = "mountain_car_debug"
         self.agent = FDRA2CAgent
         config.merge(kwargs)
         self.config = config
@@ -217,7 +217,7 @@ class FDR_A2C_Entropy(Small_A2C_FDR):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         config= self.config
-        config.entropy_weight = 0.1
+        config.entropy_weight = 0.01
         #Override when arguments are given from the running configuration
         config.merge(kwargs)
 
@@ -237,7 +237,6 @@ class FDR_A2C_ADAM(Small_A2C_FDR):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         config= self.config
-        config.alternate=False
         config.actor_body = FCBody(config.state_dim, hidden_units=config.actor_hidden_units, gate=config.gate)
         config.critic_body = FCBody(config.state_dim, hidden_units=config.critic_hidden_units, gate=config.gate)
         config.actor_optimizer_fn = lambda params, logger: torch.optim.Adam(params, config.actor_lr)

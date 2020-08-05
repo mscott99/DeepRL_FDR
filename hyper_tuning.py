@@ -115,13 +115,15 @@ def purge_model_logging(dir_name, file_pattern):
 
 
 def run_single(params, values_in_tag=[], model_index=None, eval_with_final_score=True, save_all_params=False, num_evals=1000, **kwargs):
-    complete_tag = params['tag']
+    initial_tag = complete_tag = params['tag']
     if len(values_in_tag) > 0:
         complete_tag = complete_tag +'_' + ('_').join([str(key) + '_' + str(params[key]) for key in values_in_tag])
 
     if model_index is not None:
         complete_tag= complete_tag + "_model_" + str(model_index)
         params['model_index'] = model_index #important for deletion of files by leaderboard
+
+    params['tag'] = complete_tag
 
     save_folder = 'data/' + params['group_tag']+'/'
     if not os.path.exists(save_folder):
@@ -137,6 +139,8 @@ def run_single(params, values_in_tag=[], model_index=None, eval_with_final_score
     if save_all_params:
         with open(save_folder + complete_tag+ str(".json"), 'w+') as file:
             json.dump([complete_tag, score, params], file, default=lambda o:o.__name__)
+
+    params['tag'] = initial_tag
 
     return score, model
 
@@ -823,7 +827,7 @@ def tune_Adam_cheetah():
         'critic_hidden_units':(100, 100),
         'gate':torch.relu,
         'log_keywords': [['episodic_return_train', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],],
-        'group_tag':'normalised_cheetah_Adam_v0',
+        'group_tag':'normalised_cheetah_Adam_v2',
         'tag':'run',
         'max_steps': 1e6,
         'game': 'HalfCheetah-v2',
