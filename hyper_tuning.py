@@ -831,14 +831,15 @@ def tune_Adam_cheetah():
         #'critic_lr':0.0039677
     }
     params_dist={
-        #'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
-        #'critic_lr': log_uniform_dist(1e-4, 1e-2, 10),
-        'actor_lr': log_uniform_array(1e-4, 1e-2,3, 10),
-        'critic_lr': log_uniform_array(1e-4, 1e-2, 3, 10)
+        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'critic_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        #'actor_lr': log_uniform_array(1e-4, 1e-2,3, 10),
+        #'critic_lr': log_uniform_array(1e-4, 1e-2, 3, 10)
     }
     tune_and_eval(const_params=const_params,
                   params_dist=params_dist,
                   leaderboard_size=7,
+                  num_tests=35,
                   eval_with_final_score=True,
                   num_evals=35,
                   tuning_type='randomised',
