@@ -115,13 +115,13 @@ def purge_model_logging(dir_name, file_pattern):
 
 
 def run_single(params, values_in_tag=[], model_index=None, eval_with_final_score=True, save_all_params=False, num_evals=1000, **kwargs):
-
+    complete_tag = params['tag']
     if len(values_in_tag) > 0:
-        params['tag']= params['tag'] + ('_').join([str(key) + '_' + str(params[key]) for key in values_in_tag])
+        complete_tag = complete_tag +'_' + ('_').join([str(key) + '_' + str(params[key]) for key in values_in_tag])
 
     if model_index is not None:
-        params['tag'] = params['tag'] + "_model_" + str(model_index)
-        params['model_index'] = model_index
+        complete_tag= complete_tag + "_model_" + str(model_index)
+        params['model_index'] = model_index #important for deletion of files by leaderboard
 
     save_folder = 'data/' + params['group_tag']+'/'
     if not os.path.exists(save_folder):
@@ -130,15 +130,13 @@ def run_single(params, values_in_tag=[], model_index=None, eval_with_final_score
     if(eval_with_final_score):
         score, model = estimator_fn(params, num_evals)
     else:
-        params['follow']
         score, model = estimate_by_completion(params)
 
-    model.agent.save(save_folder + params['tag'])
+    model.agent.save(save_folder + complete_tag)
 
     if save_all_params:
-        params['model_class'] = str(params['model_class'])
-        with open(save_folder + params['tag']+ str(".json"), 'w+') as file:
-            json.dump([params['tag'], score, params], file)
+        with open(save_folder + complete_tag+ str(".json"), 'w+') as file:
+            json.dump([complete_tag, score, params], file, default=lambda o:o.__name__)
 
     return score, model
 
@@ -172,13 +170,13 @@ class Leaderboard:
     def get_winner(self):
         return self.board[0]
 
-    def write_leaderboard_stats(self):
+    def write_stats(self):
         results = [elt[1] for elt in self.board]
-        stats = {'Best performance:', results[0],
-        'Worst performance: ', results[len(results) - 1],
-        'Mean performance: ', np.mean(results),
-        'Std dev: ', np.std(results),
-        'Std error: ', np.std(results) / np.sqrt(len(results))}
+        stats = {'Best performance': results[0],
+        'Worst performance': results[len(results) - 1],
+        'Mean performance': np.mean(results),
+        'Std dev': np.std(results),
+        'Std error': np.std(results) / np.sqrt(len(results))}
         with open(self.save_folder + "run_stats.json", 'w+') as file:
             json.dump(stats, file, default=lambda o: o.__name__)
 
@@ -825,9 +823,9 @@ def tune_Adam_cheetah():
         'critic_hidden_units':(100, 100),
         'gate':torch.relu,
         'log_keywords': [['episodic_return_train', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],],
-        'group_tag':'test_tune_and_eval',
-        'tag':'ADAM_',
-        'max_steps': 1e3,
+        'group_tag':'normalised_cheetah_Adam_v0',
+        'tag':'run',
+        'max_steps': 1e6,
         'game': 'HalfCheetah-v2',
         #'actor_lr':0.00229,
         #'critic_lr':0.0039677
@@ -842,10 +840,10 @@ def tune_Adam_cheetah():
                   params_dist=params_dist,
                   leaderboard_size=7,
                   eval_with_final_score=True,
-                  num_evals=10,
-                  tuning_type='grid',
-                  num_champ_tests=5,
-                  num_champ_evals=3)
+                  num_evals=35,
+                  tuning_type='randomised',
+                  num_champ_tests=10,
+                  num_champ_evals=50)
     #randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=50)
 
 def tune_variable_FDR():
