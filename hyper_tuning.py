@@ -48,6 +48,13 @@ class post_process_dist:
     def sample(self):
         return self.post_process(self.sampler.sample())
 
+def log_uniform_array(low, high, num, base):
+    low_indep = np.log(low)/np.log(base)
+    high_indep = np.log(high)/np.log(base)
+    indep_arr = np.linspace(low_indep,high_indep,num)
+    return np.power(base, indep_arr)
+
+
 search_config = {
     'lr_actor':uniform_dist(1e-4, 1e-3),
      'lr_critic':uniform_dist(1e-4, 1e-3),
@@ -81,6 +88,8 @@ def estimator_fn(params, num_evals):
     return ret, model
 
 def estimate_by_completion(params):
+    params["track_critic_vals"]=True
+    params["stop_at_victory"]=True #set the necessary params to stop at completion
     model = params['model_class'](**params)
     model.initialize()
     # model.agent.load('data/final_model_300000_4')
@@ -105,7 +114,7 @@ def purge_model_logging(dir_name, file_pattern):
     purge('log', file_pattern)
 
 
-def run_single(params, values_in_tag=[], model_index=None, save_all_params=False, num_evals=1000):
+def run_single(params, values_in_tag=[], model_index=None, eval_with_final_score=True, save_all_params=False, num_evals=1000, **kwargs):
 
     if len(values_in_tag) > 0:
         params['tag']= params['tag'] + ('_').join([str(key) + '_' + str(params[key]) for key in values_in_tag])
@@ -117,8 +126,13 @@ def run_single(params, values_in_tag=[], model_index=None, save_all_params=False
     save_folder = 'data/' + params['group_tag']+'/'
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
-    #score, model = estimate_by_completion(params)
-    score, model = estimator_fn(params, num_evals)
+
+    if(eval_with_final_score):
+        score, model = estimator_fn(params, num_evals)
+    else:
+        params['follow']
+        score, model = estimate_by_completion(params)
+
     model.agent.save(save_folder + params['tag'])
 
     if save_all_params:
@@ -155,8 +169,20 @@ class Leaderboard:
         else:
             purge_model_logging(params['group_tag'], "model_" + str(params['model_index']) + '-')
 
+    def get_winner(self):
+        return self.board[0]
 
-def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
+    def write_leaderboard_stats(self):
+        results = [elt[1] for elt in self.board]
+        stats = {'Best performance:', results[0],
+        'Worst performance: ', results[len(results) - 1],
+        'Mean performance: ', np.mean(results),
+        'Std dev: ', np.std(results),
+        'Std error: ', np.std(results) / np.sqrt(len(results))}
+        with open(self.save_folder + "run_stats.json", 'w+') as file:
+            json.dump(stats, file, default=lambda o: o.__name__)
+
+def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True, **kwargs):
     """params_dist values should be iterables"""
     if follow_all_tuned:
         values_in_tag = list(params_dist.keys())
@@ -165,16 +191,16 @@ def grid_tune_params(params_dist, const_params,num_evals, leaderboard_size=5, va
     for i,bundle in enumerate(product(*values)):
         params = dict(zip(keys, bundle))
         params.update(const_params)
-        try:
-            score, model = run_single(params, num_evals, values_in_tag, model_index=i, save_all_params=False)
-        except Exception:
-            print("Failed trial by exception")
-            print(Exception)
-            continue
+        #try:
+        score, model = run_single(params, num_evals=num_evals, values_in_tag=values_in_tag, model_index=i, save_all_params=False, **kwargs)
+        #except Exception:
+            #print("Failed trial by exception")
+            #continue
         leaderboard.add(score, params,model)
 
+    return leaderboard.get_winner()
 
-def randomised_tune_params(params_dist, const_params, num_tests , leaderboard_size=5, values_in_tag=[], follow_all_tuned=True, num_evals=1000):
+def randomised_tune_params(params_dist={}, const_params = {}, num_tests=0 , leaderboard_size=5, values_in_tag=[], follow_all_tuned=True, num_evals=1000, **kwargs):
     """params_dist elements should implement the sample() function"""
     if follow_all_tuned:
         values_in_tag = list(params_dist.keys())
@@ -186,12 +212,53 @@ def randomised_tune_params(params_dist, const_params, num_tests , leaderboard_si
         if follow_all_tuned:
             values_in_tag = list(tuned_params.keys())
         #try:
-        score, model = run_single(params,values_in_tag= values_in_tag, model_index=i, save_all_params=False, num_evals=num_evals)
+        score, model = run_single(params,values_in_tag= values_in_tag, model_index=i, save_all_params=False, num_evals=num_evals, **kwargs)
         #except:
         #    print("Failed trial by exception")
         #    print(Exception)
 #            continue
         leaderboard.add(score, params,model)
+
+    return leaderboard.get_winner()
+
+
+def run_again_and_again(const_params = {}, num_tests=0 , values_in_tag=[], num_evals=1000, **kwargs):
+    """params_dist elements should implement the sample() function"""
+    leaderboard = Leaderboard(num_tests, save_folder='data/' + const_params['group_tag'] + '/',
+                              params_file_name=const_params['group_tag'] + '.json')
+    params = const_params
+    for i in range(num_tests):
+        # try:
+        score, model = run_single(params, values_in_tag=values_in_tag, model_index=i, save_all_params=False,
+                                  num_evals=num_evals, **kwargs)
+        # except:
+        #    print("Failed trial by exception")
+        #    continue
+        leaderboard.add(score, params, model)
+    leaderboard.write_stats()
+    return leaderboard.get_winner()
+
+def tune_and_eval(tuning_type='randomised', num_champ_tests=0,num_champ_evals=None, **kwargs):
+    winner = None
+    if tuning_type == 'randomised':
+        winner = randomised_tune_params(**kwargs)
+    elif tuning_type =='grid':
+        winner = grid_tune_params(**kwargs)
+
+    #set the winning parameters
+    for tuned_param_key in kwargs['params_dist'].keys():
+        kwargs['const_params'][tuned_param_key] = winner[2][tuned_param_key]
+
+    #change the save folder
+    kwargs['const_params']['group_tag']= kwargs['const_params']['group_tag'] + "_champ"
+
+    kwargs['num_tests'] = kwargs['leaderboard_size'] = num_champ_tests
+    kwargs['num_evals'] = num_champ_evals
+    run_again_and_again(**kwargs)
+
+
+
+
 
 
 def listed_tune_params(params_list, const_params,num_evals, leaderboard_size=5, values_in_tag=[], follow_all_tuned=True):
@@ -696,7 +763,7 @@ def tune_FDR_Humanoid():
         'log_keywords': [['critic_loss', 0], ['actor_loss', 0], ['episodic_return_train', 0],
                          ['dFDR_critic', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],
                          ['max_low_count', 0], ['max_high_count', 0]],
-        'group_tag': 'normalised_humanoid_champ_FDR_v0',
+        'group_tag': 'normalised_humanoid_FDR_norm_lr_v4',
         'tag': 'FDR_',
         'max_steps': 1e7,
         'actor_mom': 0.9,
@@ -711,8 +778,8 @@ def tune_FDR_Humanoid():
         'low_count_threshold':10,
         'high_count_threshold':10,
         'high_ratio':0.5,
-        'actor_lr':0.00619193107,
-        'critic_lr':0.004502,
+        'actor_lr':0.001,
+        'critic_lr':0.001,
         'R': 0.975345
     }
     params_dist = {
@@ -758,16 +825,28 @@ def tune_Adam_cheetah():
         'critic_hidden_units':(100, 100),
         'gate':torch.relu,
         'log_keywords': [['episodic_return_train', 0], ['episode_count', 0], ['lr_critic', 0], ['lr_actor', 0],],
-        'group_tag':'normalised_cheetah_ADAM_champ_v1',
+        'group_tag':'test_tune_and_eval',
         'tag':'ADAM_',
-        'max_steps': 1e6,
+        'max_steps': 1e3,
         'game': 'HalfCheetah-v2',
+        #'actor_lr':0.00229,
+        #'critic_lr':0.0039677
     }
     params_dist={
-        'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
-        'critic_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        #'actor_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        #'critic_lr': log_uniform_dist(1e-4, 1e-2, 10),
+        'actor_lr': log_uniform_array(1e-4, 1e-2,3, 10),
+        'critic_lr': log_uniform_array(1e-4, 1e-2, 3, 10)
     }
-    randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=35, leaderboard_size=7, num_evals=35)
+    tune_and_eval(const_params=const_params,
+                  params_dist=params_dist,
+                  leaderboard_size=7,
+                  eval_with_final_score=True,
+                  num_evals=10,
+                  tuning_type='grid',
+                  num_champ_tests=5,
+                  num_champ_evals=3)
+    #randomised_tune_params(const_params=const_params, params_dist=params_dist, num_tests=10, leaderboard_size=10, num_evals=50)
 
 def tune_variable_FDR():
     const_params = {
@@ -886,8 +965,8 @@ def normalised_tune_FDR_rms():
 
 if __name__ == "__main__":
     start_generic_run()
-    tune_FDR_Humanoid()
-    #tune_Adam_cheetah()
+    #tune_FDR_Humanoid()
+    tune_Adam_cheetah()
     #tune_decreasing_cheetah_SGD()
     #tune_SGD_Cheetah_Lin_Decrease()
     #tune_FDR_Cheetah_Decrease()
